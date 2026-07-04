@@ -57,6 +57,79 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## 협업 규약 (Conventions)
+
+### 아키텍처: 표준 4계층 클린 아키텍처
+
+feature(모듈) 단위 디렉터리 구조를 따른다.
+
+```
+src/modules/<feature>/
+  domain/          # Entity, Value Object, 도메인 서비스, Repository 인터페이스(port). 외부 의존 0
+  application/     # UseCase, 입출력 DTO, port 인터페이스
+  infrastructure/  # Repository 구현, 외부 어댑터
+  presentation/    # Controller, Request/Response DTO, 매퍼
+  <feature>.module.ts
+```
+
+의존성은 안쪽으로만 향한다: presentation → application → domain, infrastructure → domain. domain 계층은 프레임워크(NestJS/ORM 데코레이터)에 침투당하지 않으며, 계층 결합은 NestJS DI + port 인터페이스로 역전한다. 상세 규칙은 `.claude/agents/`의 에이전트 정의를 참고한다.
+
+### 커밋 컨벤션: Conventional Commits
+
+업계 사실상 표준인 [Conventional Commits](https://www.conventionalcommits.org/) 1.0.0을 따른다. 이후 자동 체인지로그·버전 관리(semantic-release 등) 도입 시 그대로 연결된다.
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+- **type**(필수) / **scope**(선택, 주로 모듈·기능명) / **subject**(필수)
+- **subject**: 명령형·현재 시제, 첫 글자 소문자, 끝에 마침표 없음, 50자 이내 권장. 한국어로 쓰되 코드 식별자·기술 용어는 원문 유지.
+
+| type | 용도 |
+|------|------|
+| `feat` | 새로운 기능 추가 |
+| `fix` | 버그 수정 |
+| `docs` | 문서만 변경 |
+| `style` | 동작에 영향 없는 포맷/공백 등 |
+| `refactor` | 기능 변화 없는 구조 개선 |
+| `perf` | 성능 개선 |
+| `test` | 테스트 추가/수정 |
+| `build` | 빌드 시스템·의존성 변경 (npm, tsconfig 등) |
+| `ci` | CI 설정 변경 (도입 이후) |
+| `chore` | 위에 속하지 않는 잡무 (설정, 도구 등) |
+| `revert` | 이전 커밋 되돌리기 |
+
+예시:
+
+```
+feat(auth): JWT 기반 로그인 UseCase 추가
+fix(user): 이메일 중복 검사 시 대소문자 미구분 버그 수정
+test(auth): 로그인 UseCase 단위 테스트 추가
+chore: 서브 에이전트 정의 파일 추가
+```
+
+하위 호환을 깨는 변경은 type 뒤에 `!`를 붙이고 footer에 `BREAKING CHANGE:`로 명시한다.
+
+### 브랜치 전략
+
+`main`에서 분기해 작업 후 PR로 병합한다. `main`에 직접 커밋하지 않는다. 브랜치명은 커밋 type을 접두어로 쓰고 소문자·하이픈으로 구성한다.
+
+```
+<type>/<간단한-설명>     예) feat/user-signup, fix/login-race-condition
+```
+
+### 커밋/PR 전 체크
+
+```bash
+$ npm run lint    # ESLint + Prettier
+$ npm run build   # 타입/컴파일 검증
+$ npm test        # 단위 테스트
+```
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
