@@ -16,5 +16,9 @@ Claude Code가 이 프로젝트 디렉터리에서 세션을 시작할 때마다
 사용자가 NestJS를 처음 접해 학습 목적으로 단순화하기로 결정했다. 상세는 `docs/ARCHITECTURE.md` 참고.
 문서와 실제 코드(`src/modules/*`)가 어긋나면 실제 코드를 따르고, 발견 시 문서를 갱신한다.
 
+## 서브 에이전트 사용
+Task 도구로 서브 에이전트(planner/implementer/reviewer/Explore 등)를 실행할 때는 **사용 사실을 사용자에게 먼저 표시**한다.
+어떤 에이전트를 어떤 목적으로 호출하는지 한 줄로 밝힌 뒤 실행한다. 예: "planner 에이전트로 W2 설계를 분석합니다."
+
 ## 커밋 컨벤션
 [Conventional Commits](https://www.conventionalcommits.org/) 1.0.0을 따른다.
