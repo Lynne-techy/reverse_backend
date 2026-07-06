@@ -1,39 +1,42 @@
 # Re-Verse Backend 아키텍처 설계
 
 > Re-Verse는 성경을 "읽는" 서비스가 아니라 **매일 손으로 쓰게 만드는 습관 시스템**이다.
-> 이 문서는 `reverse_backend`(NestJS API 서버)의 초기 설계를 정의한다. 표준 4계층 클린 아키텍처를 따른다.
+> 이 문서는 `reverse_backend`(NestJS API 서버)의 초기 설계를 정의한다. NestJS를 처음 접하는 팀 사정상,
+> 표준 4계층 클린 아키텍처 대신 **controller/service/repository 단순 구조**를 따른다.
 
 ## 0. 범위와 스택
 
 - **이 저장소**: NestJS 11 + TypeScript API 서버. 인증 + 비즈니스 로직 + presigned URL 발급 + OCR 잡 등록 + streak/통계.
-- **DB**: Supabase (PostgreSQL). ORM 대신 `@supabase/supabase-js` 쿼리 빌더 사용, 단 infrastructure 계층 Repository 뒤에 격리.
+- **DB**: Supabase (PostgreSQL). ORM 대신 `@supabase/supabase-js` 쿼리 빌더 사용, 단 Repository 뒤에 격리.
 - **인증**: Supabase Auth (구글 우선, 카카오). 프론트가 OAuth 전담, 백엔드는 JWT 검증만.
 - **이미지**: OCI Object Storage (presigned URL 업로드).
 - **OCR**: 별도 Python(PaddleOCR) 워커 — 이 저장소 범위 밖. 백엔드는 잡 등록 + 결과 수신.
 - **엣지**: Cloudflare (CDN/WAF).
 
-## 0-1. 전역 기반 구조 (모듈 착수 전 선행)
+## 0-1. 전역 기반 구조 (실제 구현됨)
 
 ```
 src/
-  config/                      # ConfigModule, env 스키마 검증(@nestjs/config + zod/joi)
-  shared/
-    infrastructure/
-      supabase/                # SupabaseClientProvider (service-role client 팩토리)
-      storage/                 # OciStorageAdapter (presigned URL)
-    domain/                    # 공용 VO(UserId 등), 공용 예외 기반 클래스
-    presentation/              # 전역 ExceptionFilter, 공통 Response 래퍼
+  config/                      # ConfigModule, env 스키마 검증(zod)
+  common/
+    supabase/                  # SupabaseClientProvider (service-role client 팩토리)
+    filters/                   # 전역 ExceptionFilter
+  health/                      # 헬스체크 컨트롤러
   modules/<feature>/
-    domain/ application/ infrastructure/ presentation/
+    <feature>.controller.ts    # 라우팅, 요청/응답 DTO 매핑
+    <feature>.service.ts       # 비즈니스 로직
+    <feature>.repository.ts    # 데이터 접근 (필요할 때만)
+    <feature>.types.ts         # 순수 타입/인터페이스
+    dto/                       # 요청 DTO (class-validator)
     <feature>.module.ts
 ```
 
 - 추가 의존성(구현 단계 설치): `@nestjs/config`, `@supabase/supabase-js`, `jose`(JWKS 검증), OCI SDK(`oci-objectstorage`/`oci-common`) 또는 S3 호환 시 `@aws-sdk/client-s3` + presigner, `class-validator`/`class-transformer`, (잡 큐 라이브러리 채택 시) `pg-boss`.
-- **Supabase 접근은 반드시 `shared/infrastructure/supabase`의 단일 클라이언트 provider 경유.** domain/application은 이 클라이언트 타입을 import하지 않는다(port 뒤로 격리).
+- **Supabase 접근은 반드시 `common/supabase`의 단일 클라이언트 provider 경유.** service/repository가 이 provider를 생성자 주입받아 사용한다.
 
-## 4계층 규약
+## 모듈 구조 규약
 
-의존성은 안쪽으로만 향한다: presentation → application → domain, infrastructure → domain(port 구현). domain은 프레임워크(NestJS/ORM 데코레이터)에 침투당하지 않는다. 계층 결합은 NestJS DI + port 인터페이스 토큰으로 역전한다.
+의존성은 한 방향으로만 향한다: **controller → service → repository**. Port/인터페이스로 역전하지 않고 NestJS DI(생성자 주입)로 직접 연결한다. 타입은 `<feature>.types.ts`에 프레임워크/DB와 무관한 순수 데이터 형태로 정의한다.
 
 ---
 
@@ -52,14 +55,14 @@ src/
 | created_at | timestamptz | default now() |
 | updated_at | timestamptz | default now() |
 
-`id`를 별도 발급하지 않고 `auth.users.id`를 그대로 PK/FK로 사용 → 1:1 동기화 단순화. domain: `User` Entity (VO: `UserId`, `Email`, `AuthProvider`).
+`id`를 별도 발급하지 않고 `auth.users.id`를 그대로 PK/FK로 사용 → 1:1 동기화 단순화. 타입: `user.types.ts`의 `User`, `AuthProvider`.
 
 ### A-2. verses (성경 구절 원문)
 | 컬럼 | 타입 | 제약 |
 |---|---|---|
 | id | bigint | PK, identity |
 | translation_code | text | not null (`GAE`, `NIV` 등) |
-| book_no | smallint | not null (1–66) |
+| book_no | smallint | not null |
 | book_name | text | not null |
 | chapter | smallint | not null |
 | verse_no | smallint | not null |
@@ -67,7 +70,9 @@ src/
 | char_count | int | not null (유사도/난이도 캐시) |
 | created_at | timestamptz | default now() |
 
-Unique: `(translation_code, book_no, chapter, verse_no)`. domain: `Verse` Entity, VO `VerseReference`, `Translation`. 다중 절 지원은 열린 질문(§열린 질문).
+Unique: `(translation_code, book_no, chapter, verse_no)`. 타입: `verse.types.ts`의 `Verse`. 다중 절 지원은 열린 질문(§열린 질문).
+
+> `book_no` 범위(1~66) `check` 제약은 두지 않음 — `verses`는 신뢰된 시딩 스크립트로만 채워지는 참조 테이블이라 DB 레벨 방어가 불필요하다고 판단 (`docs/DATABASE.md` 참고).
 
 ### A-3. emotion_tags (감정 태그 마스터, 8종)
 | 컬럼 | 타입 | 제약 |
@@ -111,7 +116,7 @@ PK: `(verse_id, tag_code)`. Index: `(tag_code, weight desc)`.
 | created_at | timestamptz | default now() |
 | completed_at | timestamptz | null |
 
-Index: `(user_id, created_at desc)`, `status`. domain: `WritingSession` Aggregate Root. VO: `OcrResult`, `SessionStatus`. 상태 전이는 도메인 메서드(`markUploaded`, `applyOcrResult`)로 캡슐화.
+Index: `(user_id, created_at desc)`, `status`. 타입: `writing-session.types.ts`의 `WritingSession`. 상태 전이 로직(`markUploaded`, `applyOcrResult`)은 `writing-session.service.ts`에 함수로 둔다.
 
 ### A-7. ocr_jobs (OCR 비동기 잡 — 워커 인터페이스)
 | 컬럼 | 타입 | 제약 |
@@ -139,7 +144,7 @@ Index: `status` 부분 인덱스(`WHERE status='queued'`), `enqueued_at`. 명시
 | freeze_available | smallint | default 0 |
 | updated_at | timestamptz | default now() |
 
-domain: `UserStatistics` Aggregate. streak 계산(연속/끊김/freeze 소모)은 도메인 서비스 `StreakCalculator`에 순수 함수로 격리.
+타입: `UserStatistics`. streak 계산(연속/끊김/freeze 소모)은 `streak-calculator.ts`에 순수 함수로 분리해 테스트하기 쉽게 한다.
 
 ### A-9. user_daily_activity (일자별 활동 — 잔디/별)
 | 컬럼 | 타입 | 제약 |
@@ -166,13 +171,13 @@ PK: `(user_id, activity_date)`. 시각화 지표 매핑은 열린 질문 — 후
 ### A-11. quests / user_quests
 - `quests`: id, code, title, description, type(`daily`\|`streak`\|`total`), goal(int), reward(jsonb), active(bool).
 - `user_quests`: (user_id, quest_id) PK, progress(int), completed_at, claimed_at.
-- domain: `Quest` Entity, `UserQuestProgress` Entity. 진행 갱신은 필사 완료 이벤트 구독 서비스에서.
+- 타입: `Quest`, `UserQuestProgress`. 진행 갱신은 필사 완료 처리 후 `QuestService`를 직접 호출해서 수행한다.
 
-### A-12. 물리 스키마 ↔ domain 매핑
-Repository 구현(infrastructure)만 supabase-js row(snake_case)를 인지. domain Entity는 camelCase, DB 무지. 매핑은 infrastructure Mapper(`WritingSessionMapper.toDomain/toPersistence`)에 집중. presentation의 Request/Response DTO 매퍼와 구분(계층별 매퍼 2종).
+### A-12. 물리 스키마 ↔ 타입 매핑
+Repository만 supabase-js row(snake_case)를 인지하고, 반환 전 camelCase 타입으로 매핑한다. Request/Response DTO 매핑은 controller에서 처리한다(매핑 책임 2곳으로 분리: repository↔DB, controller↔HTTP).
 
 ### A-13. RLS 방침 (권장)
-- **백엔드 service-role 단일 경로.** 모든 DB 접근은 NestJS가 service_role 키로 수행, 인가는 application 계층에서 `user_id` 스코프로 강제.
+- **백엔드 service-role 단일 경로.** 모든 DB 접근은 NestJS가 service_role 키로 수행, 인가는 service에서 `user_id` 스코프로 강제.
 - **심층 방어로 RLS는 켜두되 정책 최소화**: 소유 테이블에 `auth.uid() = user_id` 읽기 정책, `verses`/`emotion_tags`는 공개 읽기. service_role은 RLS 우회하므로 백엔드 동작 무영향.
 
 ---
@@ -189,26 +194,17 @@ Repository 구현(infrastructure)만 supabase-js row(snake_case)를 인지. doma
 - 대안(레거시): 공유 HS256 `SUPABASE_JWT_SECRET`. 간단하나 시크릿 배포/롤테이션 부담.
 - 검증 항목: 서명, `iss`(프로젝트 URL), `aud=authenticated`, `exp`. `sub`=auth user id, `email`, `app_metadata.provider` 추출.
 
-### B-3. 계층 배치
+### B-3. 계층 배치 (실제 구현됨)
 ```
 src/modules/auth/
-  domain/
-    authenticated-user.ts          # AuthenticatedUser VO
-    token-verifier.port.ts         # interface + DI 토큰(Symbol)
-  application/
-    provision-user.usecase.ts      # JIT: users upsert
-    ports/user-repository.port.ts
-  infrastructure/
-    supabase-jwt.verifier.ts       # TokenVerifierPort 구현(jose/JWKS)
-    supabase-user.repository.ts
-  presentation/
-    supabase-auth.guard.ts         # 헤더 파싱→verifier→provision→req.user
-    current-user.decorator.ts      # @CurrentUser()
+  auth.guard.ts               # 전역 Guard: 토큰 추출 → verifyToken → JIT 프로비저닝 → req.user
+  auth.service.ts             # jose/JWKS 기반 JWT 검증
+  current-user.decorator.ts   # @CurrentUser()
+  public.decorator.ts         # @Public() — Guard 예외 화이트리스트
   auth.module.ts
 ```
-- **Guard(presentation)**: `Authorization: Bearer` 추출 → `TokenVerifierPort.verify()` → 검증 클레임으로 `ProvisionUserUseCase`(최초 요청 시 users upsert) → `req.user`에 `AuthenticatedUser` 주입.
-- **Port(application/domain)**: usecase는 `TokenVerifierPort`에만 의존.
-- **Adapter(infrastructure)**: `SupabaseJwtVerifier`가 jose+JWKS 실제 검증.
+- **AuthGuard**: `Authorization: Bearer` 추출 → `AuthService.verifyToken()` → 처음 보는 사용자면 `UserService.provisionFromAuth()`(users upsert) → `req.user`에 저장.
+- **AuthService**: `jose`의 `createRemoteJWKSet` + `jwtVerify`로 Supabase JWKS 엔드포인트 검증. 서명/`iss`/`aud`/`exp` 확인 후 `sub`/`email`/`app_metadata.provider` 추출.
 - 전역: `APP_GUARD`로 글로벌 등록 + `@Public()` 데코레이터로 예외(헬스체크, OCR 콜백) 화이트리스트.
 
 ### B-4. users ↔ auth.users 동기화
@@ -216,7 +212,7 @@ src/modules/auth/
 - 대안: Postgres 트리거. 즉시 동기화되나 로직이 DB에 숨음.
 
 ### B-5. 인가
-리소스 소유권 검사는 application usecase에서 `authenticatedUser.userId === resource.userId` 확인, 위반 시 `ForbiddenException`. Guard는 인증만, 인가는 usecase 책임.
+리소스 소유권 검사는 각 기능의 service에서 `authenticatedUser.userId === resource.userId` 확인, 위반 시 `ForbiddenException`. Guard는 인증만, 인가는 service 책임.
 
 ---
 
@@ -237,26 +233,25 @@ src/modules/auth/
 
 **근거**: 결과 수신을 워커 콜백으로 하는 이유는 streak/통계/퀘스트 갱신이 도메인 로직이므로 반드시 NestJS를 거쳐야 하기 때문. 워커는 "계산"만, NestJS는 "상태 전이·집계"만. 초기엔 이미 있는 Postgres로 큐 구현이 운영 부담 최소(Redis/BullMQ는 트래픽 증가 시 전환).
 
-### C-2. Presigned URL 발급(OCI) 계층 배치
+### C-2. Presigned URL 발급(OCI) 구조
 ```
 src/modules/writing/
-  domain/ports/object-storage.port.ts      # issueUploadUrl(key)
-  application/issue-upload-url.usecase.ts   # key 생성 규칙, 권한 검사
-  infrastructure/oci-storage.adapter.ts     # ObjectStoragePort 구현
-  presentation/writing.controller.ts        # POST /writings/upload-url
+  writing.controller.ts       # POST /writings/upload-url
+  writing.service.ts          # key 생성 규칙, 권한 검사, presigned URL 발급 호출
+  object-storage.client.ts    # OCI SDK 래퍼: issueUploadUrl(key)
 ```
 클라이언트가 URL로 직접 PUT 업로드 후 `POST /writings`(object_key + verse_id)로 세션 생성 → C-1 잡 등록.
 
 ### C-3. 모듈별 책임
-- **Auth**: JWT 검증·프로비저닝. UseCase `ProvisionUser`; Port `TokenVerifier`, `UserRepository`.
-- **User**: 프로필. Entity `User`; UseCase `GetMyProfile`, `UpdateProfile`.
-- **Bible**: 구절·번역·감정태그·오늘의 말씀. Entity `Verse`,`DailyVerse`,`EmotionTag`; UseCase `GetDailyVerse`, `RecommendByEmotion`, `AssignDailyVerse`(배치).
-- **Writing**: 필사 핵심. Aggregate `WritingSession`; UseCase `IssueUploadUrl`, `CreateWritingSession`, `HandleOcrResult`, `ListMyWritings`; Port `WritingSessionRepository`,`OcrJobRepository`,`ObjectStoragePort`. 완료 시 `WritingCompleted` 이벤트.
-- **Streak**: 도메인 서비스 `StreakCalculator`(순수); Aggregate `UserStatistics`; UseCase `ApplyWritingToStreak`, `GrantFreeze`, `ConsumeFreeze`.
-- **Stats**: UseCase `GetMyStatistics`, `GetActivityCalendar`(잔디/별). 쓰기는 Writing/Streak 후속 처리에서.
-- **Quest**: Entity `Quest`,`UserQuestProgress`; UseCase `ListQuests`, `UpdateQuestProgress`, `ClaimReward`.
+- **Auth**: JWT 검증·프로비저닝. `AuthService.verifyToken`, `AuthGuard`.
+- **User**: 프로필. `UserService.getProfile/updateProfile/provisionFromAuth`, `UserRepository`.
+- **Bible**: 구절·번역·감정태그·오늘의 말씀. `VerseService.getDailyVerse/recommendByEmotion`, 배치 `assignDailyVerse`.
+- **Writing**: 필사 핵심. `WritingService.issueUploadUrl/createWritingSession/handleOcrResult/listMyWritings`; `WritingRepository`, `OcrJobRepository`, `ObjectStorageClient`.
+- **Streak**: `StreakCalculator`(순수 함수); `StatisticsService.applyWritingToStreak/grantFreeze/consumeFreeze`.
+- **Stats**: `StatisticsService.getMyStatistics/getActivityCalendar`(잔디/별). 쓰기는 Writing/Streak 후속 처리에서.
+- **Quest**: `QuestService.listQuests/updateQuestProgress/claimReward`.
 
-모듈 간 결합은 도메인 이벤트로 느슨하게(`WritingCompleted` → Streak/Stats/Quest 반응). **MVP는 명시적 오케스트레이션**(`HandleOcrResult`가 각 모듈 서비스 순차 호출) 권장 — 단순·트랜잭션 제어 쉬움.
+모듈 간 결합은 이벤트 없이 **명시적으로 순차 호출**한다(예: 필사 완료 시 `WritingService`가 `StatisticsService`, `QuestService`를 직접 호출). 단순하고 트랜잭션 제어가 쉽다.
 
 ### C-4. 백엔드 구현 우선순위 (6주 로드맵)
 - **W1 — 기반+인증+스키마**: config/env, Supabase client provider, 전 테이블 마이그레이션(SQL), Auth Guard+JWKS+JIT 프로비저닝, User 프로필 API, verses/emotion_tags 시딩.
@@ -286,4 +281,4 @@ src/modules/writing/
 - `src/main.ts` — 전역 파이프/필터/CORS 부트스트랩
 - `package.json` — 의존성 추가(supabase-js, jose, config, OCI/S3 SDK)
 - `tsconfig.json` — 모듈 해석·데코레이터 설정, 경로 alias
-- `.claude/agents/implementer.md` — 구현자 4계층 규약 원본
+- `CLAUDE.md` — 프로젝트 공통 규칙(아키텍처, 세션 인수인계)

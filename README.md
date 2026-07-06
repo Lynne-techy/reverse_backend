@@ -59,20 +59,22 @@ $ npm run test:cov
 
 ## 협업 규약 (Conventions)
 
-### 아키텍처: 표준 4계층 클린 아키텍처
+### 아키텍처: controller/service/repository 단순 구조
 
-feature(모듈) 단위 디렉터리 구조를 따른다.
+NestJS를 처음 접하는 팀 사정상, 표준 4계층 클린 아키텍처 대신 feature(모듈) 단위로
+역할만 파일로 나누는 단순 구조를 따른다.
 
 ```
 src/modules/<feature>/
-  domain/          # Entity, Value Object, 도메인 서비스, Repository 인터페이스(port). 외부 의존 0
-  application/     # UseCase, 입출력 DTO, port 인터페이스
-  infrastructure/  # Repository 구현, 외부 어댑터
-  presentation/    # Controller, Request/Response DTO, 매퍼
+  <feature>.controller.ts   # 라우팅, 요청/응답 DTO 매핑
+  <feature>.service.ts      # 비즈니스 로직
+  <feature>.repository.ts   # 데이터 접근 (Supabase 쿼리) — 필요할 때만
+  <feature>.types.ts        # 순수 타입/인터페이스
+  dto/                      # 요청 DTO (class-validator)
   <feature>.module.ts
 ```
 
-의존성은 안쪽으로만 향한다: presentation → application → domain, infrastructure → domain. domain 계층은 프레임워크(NestJS/ORM 데코레이터)에 침투당하지 않으며, 계층 결합은 NestJS DI + port 인터페이스로 역전한다. 상세 규칙은 `.claude/agents/`의 에이전트 정의를 참고한다.
+의존성은 **controller → service → repository** 한 방향으로만 향한다. Port/인터페이스로 역전하지 않고 NestJS DI(생성자 주입)로 직접 연결한다. 상세는 `docs/ARCHITECTURE.md`, 세션 간 진행 상황은 `docs/PROGRESS.md` 참고.
 
 ### 커밋 컨벤션: Conventional Commits
 
@@ -106,9 +108,9 @@ src/modules/<feature>/
 예시:
 
 ```
-feat(auth): JWT 기반 로그인 UseCase 추가
+feat(auth): JWT 기반 로그인 기능 추가
 fix(user): 이메일 중복 검사 시 대소문자 미구분 버그 수정
-test(auth): 로그인 UseCase 단위 테스트 추가
+test(auth): 로그인 서비스 단위 테스트 추가
 chore: 서브 에이전트 정의 파일 추가
 ```
 
