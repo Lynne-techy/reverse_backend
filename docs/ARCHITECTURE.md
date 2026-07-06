@@ -6,11 +6,11 @@
 
 ## 0. 범위와 스택
 
-- **이 저장소**: NestJS 11 + TypeScript API 서버. 인증 + 비즈니스 로직 + presigned URL 발급 + OCR 잡 등록 + streak/통계.
+- **이 저장소**: NestJS 11 + TypeScript API 서버. 인증 + 비즈니스 로직 + presigned URL 발급 + Gemini 유사도 검사 + streak/통계.
 - **DB**: Supabase (PostgreSQL). ORM 대신 `@supabase/supabase-js` 쿼리 빌더 사용, 단 Repository 뒤에 격리.
 - **인증**: Supabase Auth (구글 우선, 카카오). 프론트가 OAuth 전담, 백엔드는 JWT 검증만.
-- **이미지**: OCI Object Storage (presigned URL 업로드).
-- **OCR**: 별도 Python(PaddleOCR) 워커 — 이 저장소 범위 밖. 백엔드는 잡 등록 + 결과 수신.
+- **이미지**: OCI Object Storage (presigned URL 업로드). MVP/슬라이스는 Supabase Storage로 대체.
+- **유사도 검사**: **Gemini API(멀티모달)** 를 NestJS가 직접 호출. 필사 이미지 + 원문 구절을 함께 보내 전사·유사도를 판정. 별도 OCR 워커 없음 (기존 Python/PaddleOCR 워커 방침 폐기, 2026-07-06).
 - **엣지**: Cloudflare (CDN/WAF).
 
 ## 0-1. 전역 기반 구조 (실제 구현됨)
@@ -31,7 +31,7 @@ src/
     <feature>.module.ts
 ```
 
-- 추가 의존성(구현 단계 설치): `@nestjs/config`, `@supabase/supabase-js`, `jose`(JWKS 검증), OCI SDK(`oci-objectstorage`/`oci-common`) 또는 S3 호환 시 `@aws-sdk/client-s3` + presigner, `class-validator`/`class-transformer`, (잡 큐 라이브러리 채택 시) `pg-boss`.
+- 추가 의존성(구현 단계 설치): `@nestjs/config`, `@supabase/supabase-js`, `jose`(JWKS 검증), Google Gen AI SDK(`@google/genai`, Gemini 호출), OCI SDK(`oci-objectstorage`/`oci-common`) 또는 S3 호환 시 `@aws-sdk/client-s3` + presigner, `class-validator`/`class-transformer`, (백그라운드 잡 스케줄링) `@nestjs/schedule`.
 - **Supabase 접근은 반드시 `common/supabase`의 단일 클라이언트 provider 경유.** service/repository가 이 provider를 생성자 주입받아 사용한다.
 
 ## 모듈 구조 규약
@@ -107,31 +107,18 @@ PK: `(verse_id, tag_code)`. Index: `(tag_code, weight desc)`.
 | id | uuid | PK |
 | user_id | uuid | FK→users, not null |
 | verse_id | bigint | FK→verses, not null |
-| object_key | text | not null (OCI 키; public URL 대신 키 저장) |
+| object_key | text | not null (스토리지 키; public URL 대신 키 저장) |
 | status | text | not null default `pending` (`pending`\|`uploaded`\|`processing`\|`completed`\|`failed`) |
-| ocr_text | text | null |
-| ocr_score | numeric(5,2) | null (0–100) |
-| similarity_score | numeric(5,2) | null (0–100) |
+| recognized_text | text | null (Gemini 전사 텍스트) |
+| similarity_score | numeric(5,2) | null (Gemini 유사도, 0–100) |
 | passed | boolean | null |
 | created_at | timestamptz | default now() |
 | completed_at | timestamptz | null |
 
-Index: `(user_id, created_at desc)`, `status`. 타입: `writing-session.types.ts`의 `WritingSession`. 상태 전이 로직(`markUploaded`, `applyOcrResult`)은 `writing-session.service.ts`에 함수로 둔다.
+Index: `(user_id, created_at desc)`, `status`. 타입: `writing-session.types.ts`의 `WritingSession`. 상태 전이 로직(`markUploaded`, `applySimilarityResult`)은 `writing-session.service.ts`에 함수로 둔다.
 
-### A-7. ocr_jobs (OCR 비동기 잡 — 워커 인터페이스)
-| 컬럼 | 타입 | 제약 |
-|---|---|---|
-| id | uuid | PK |
-| session_id | uuid | FK→writing_sessions, unique, not null |
-| object_key | text | not null |
-| verse_id | bigint | not null |
-| status | text | not null default `queued` (`queued`\|`processing`\|`done`\|`failed`) |
-| attempts | smallint | default 0 |
-| error | text | null |
-| enqueued_at | timestamptz | default now() |
-| started_at / finished_at | timestamptz | null |
-
-Index: `status` 부분 인덱스(`WHERE status='queued'`), `enqueued_at`. 명시적 테이블 권장 — Python 워커가 스키마를 직접 이해하기 쉬움.
+### A-7. ~~ocr_jobs~~ (폐기, 2026-07-06)
+당초 별도 Python OCR 워커와의 잡 큐 연동을 위해 설계했으나, **유사도 검사를 Gemini API 직접 호출로 변경**하면서 폐기했다. Gemini를 NestJS가 직접 호출하므로 크로스-프로세스 조율용 잡 테이블이 불필요하다. 비동기 처리는 별도 테이블 없이 `writing_sessions.status`(`uploaded`→`processing`→`completed`/`failed`)를 잡 상태로 삼아 인프로세스 백그라운드 잡으로 수행한다(§C-1). 마이그레이션에는 애초에 생성된 적 없다.
 
 ### A-8. user_statistics (사용자 집계, 1:1)
 | 컬럼 | 타입 | 제약 |
@@ -205,7 +192,7 @@ src/modules/auth/
 ```
 - **AuthGuard**: `Authorization: Bearer` 추출 → `AuthService.verifyToken()` → 처음 보는 사용자면 `UserService.provisionFromAuth()`(users upsert) → `req.user`에 저장.
 - **AuthService**: `jose`의 `createRemoteJWKSet` + `jwtVerify`로 Supabase JWKS 엔드포인트 검증. 서명/`iss`/`aud`/`exp` 확인 후 `sub`/`email`/`app_metadata.provider` 추출.
-- 전역: `APP_GUARD`로 글로벌 등록 + `@Public()` 데코레이터로 예외(헬스체크, OCR 콜백) 화이트리스트.
+- 전역: `APP_GUARD`로 글로벌 등록 + `@Public()` 데코레이터로 예외(헬스체크 등) 화이트리스트.
 
 ### B-4. users ↔ auth.users 동기화
 - **권장: JIT 프로비저닝(요청 시 upsert).** Guard가 검증 통과 후 `users`에 `id=sub` upsert. 프로비저닝 시 `user_statistics` 초기 row도 같은 usecase 트랜잭션에서 생성.
@@ -218,20 +205,21 @@ src/modules/auth/
 
 ## C. 아키텍처 & 기능 로드맵
 
-### C-1. API ↔ OCR 워커 비동기 연동 (⚠️ 보류 — 방식 미확정)
+### C-1. 필사 유사도 검사 — Gemini API 인프로세스 비동기 처리 (2026-07-06 확정)
 
-> **결정 보류**: OCR 워커 연동 방식은 아직 확정하지 않는다. 아래는 유력 후보이며, 실제 워커 팀과의 계약(payload 스키마·인증)을 정할 때 재검토한다.
-> 그 전까지 `writing_sessions`는 `pending`/`uploaded` 상태까지만 다루고, 잡 등록·콜백 처리는 구현 범위에서 제외한다(§C-4 W3에서 착수).
+> **방침 변경**: 별도 Python(PaddleOCR) 워커 + 잡 큐(`ocr_jobs`) + HMAC 콜백 방식을 폐기하고, **Gemini API(멀티모달)를 NestJS가 직접 호출**한다. 워커가 NestJS 자신이므로 크로스-프로세스 조율(폴링/콜백/HMAC)이 통째로 사라진다.
 
-**후보(권장): DB 테이블 기반 잡 큐(`ocr_jobs`) + 워커 폴링 + 워커→NestJS HMAC 콜백.**
+**구조: `writing_sessions.status`를 잡 상태로 삼는 인프로세스 백그라운드 잡.**
 
-1. NestJS: 필사 요청 시 `writing_sessions`(uploaded) + `ocr_jobs`(queued) 생성.
-2. Python 워커: `ocr_jobs` where queued를 `FOR UPDATE SKIP LOCKED`로 폴링·클레임(processing).
-3. 워커: OCI 이미지 다운로드 → PaddleOCR → 원문 비교 → similarity/ocr_score.
-4. 워커 → NestJS 내부 콜백 `POST /internal/ocr/callback`(HMAC 서명, `@Public()`이되 별도 Guard 보호).
-5. NestJS: 콜백 usecase가 `WritingSession.applyOcrResult()` → 통과 판정 → **streak/stats/daily_activity/quest 후속 처리를 도메인 트랜잭션으로 실행.**
+1. NestJS: 필사 요청 시 `writing_sessions`를 `uploaded` 상태로 생성하고 **세션을 즉시 반환**(Gemini 호출을 기다리지 않음).
+2. 백그라운드 처리기(`@nestjs/schedule` 크론/인터벌 or 인메모리 큐): `uploaded` 세션을 원자적으로 클레임(`update ... set status='processing' where status='uploaded'`, 다중 인스턴스 대비)한다.
+3. 처리기: 스토리지에서 이미지 로드 → **Gemini 호출**(이미지 + 원문 구절 텍스트를 함께 전달, 전사 + 유사도 판정 요청) → `recognized_text`/`similarity_score` 수신.
+4. `WritingSession.applySimilarityResult()` → 임계치로 통과 판정 → `completed`/`failed`, `completed_at` 기록. → **streak/stats/daily_activity/quest 후속 처리를 도메인 트랜잭션으로 실행.**
+5. 클라이언트는 `GET /writings/:id`로 상태(`processing`→`completed`/`failed`)와 점수를 **폴링**한다.
 
-**근거**: 결과 수신을 워커 콜백으로 하는 이유는 streak/통계/퀘스트 갱신이 도메인 로직이므로 반드시 NestJS를 거쳐야 하기 때문. 워커는 "계산"만, NestJS는 "상태 전이·집계"만. 초기엔 이미 있는 Postgres로 큐 구현이 운영 부담 최소(Redis/BullMQ는 트래픽 증가 시 전환).
+**근거**: 유사도 "계산"과 streak/통계/퀘스트 "상태 전이·집계"가 모두 NestJS 한 프로세스 안에 있어 경계가 단순해진다. 동기(요청 내) 대신 비동기로 두는 이유는 Gemini 멀티모달 호출이 수 초 걸려 요청을 붙잡지 않기 위해서다. 초기엔 인프로세스 스케줄러로 충분하고, 트래픽/재시도 요구가 커지면 외부 큐(pg-boss/Redis)로 전환한다.
+
+> **실패·재시도**: 1차 MVP는 Gemini 실패 시 `status='failed'`로 종료(사용자 재시도)한다. 자동 재시도/에러 상세 저장(`attempts`/`error` 컬럼)은 열린 항목 — 필요 시 후속 마이그레이션으로 추가.
 
 ### C-2. Presigned URL 발급(OCI) 구조
 ```
@@ -240,13 +228,13 @@ src/modules/writing/
   writing.service.ts          # key 생성 규칙, 권한 검사, presigned URL 발급 호출
   object-storage.client.ts    # OCI SDK 래퍼: issueUploadUrl(key)
 ```
-클라이언트가 URL로 직접 PUT 업로드 후 `POST /writings`(object_key + verse_id)로 세션 생성 → C-1 잡 등록.
+클라이언트가 URL로 직접 PUT 업로드 후 `POST /writings`(object_key + verse_id)로 세션 생성(`uploaded`) → C-1 백그라운드 유사도 검사가 이어받음.
 
 ### C-3. 모듈별 책임
 - **Auth**: JWT 검증·프로비저닝. `AuthService.verifyToken`, `AuthGuard`.
 - **User**: 프로필. `UserService.getProfile/updateProfile/provisionFromAuth`, `UserRepository`.
 - **Bible**: 구절·번역·감정태그·오늘의 말씀. `VerseService.getDailyVerse/recommendByEmotion`, 배치 `assignDailyVerse`.
-- **Writing**: 필사 핵심. `WritingService.issueUploadUrl/createWritingSession/handleOcrResult/listMyWritings`; `WritingRepository`, `OcrJobRepository`, `ObjectStorageClient`.
+- **Writing**: 필사 핵심. `WritingService.issueUploadUrl/createWritingSession/listMyWritings`, 백그라운드 처리기 `SimilarityProcessor.processPending`(→`applySimilarityResult`); `WritingRepository`, `GeminiClient`, `ObjectStorageClient`.
 - **Streak**: `StreakCalculator`(순수 함수); `StatisticsService.applyWritingToStreak/grantFreeze/consumeFreeze`.
 - **Stats**: `StatisticsService.getMyStatistics/getActivityCalendar`(잔디/별). 쓰기는 Writing/Streak 후속 처리에서.
 - **Quest**: `QuestService.listQuests/updateQuestProgress/claimReward`.
@@ -256,18 +244,18 @@ src/modules/writing/
 ### C-4. 백엔드 구현 우선순위 (6주 로드맵)
 - **W1 — 기반+인증+스키마**: config/env, Supabase client provider, 전 테이블 마이그레이션(SQL), Auth Guard+JWKS+JIT 프로비저닝, User 프로필 API, verses/emotion_tags 시딩.
 - **W2 — Bible+업로드 진입**: verses 조회, 오늘의 말씀(전역 배정 배치 + `GetDailyVerse`), OCI presigned URL, `CreateWritingSession`(잡 enqueue).
-- **W3 — OCR 파이프라인**: `ocr_jobs` 큐, 워커 콜백(HMAC), `HandleOcrResult`, 상태 전이. 워커 payload 계약 확정.
+- **W3 — 유사도 파이프라인**: 백그라운드 처리기(`uploaded` 클레임), Gemini 호출(`GeminiClient`), `applySimilarityResult`, 상태 전이. Gemini 프롬프트·응답 스키마·임계치 확정.
 - **W4 — Streak+Stats**: `StreakCalculator`, `UserStatistics` 갱신, `user_daily_activity` 집계, freeze, 잔디/별 조회.
 - **W5 — Quest+추천**: 퀘스트 정의/진행/보상, 감정 태그 추천.
 - **W6 — 하드닝·배포**: RLS 최소 적용, 예외 필터/로깅, e2e, Cloudflare/배포, 인덱스 점검.
 
-**핵심 의존 사슬**: 인증·스키마(W1) → 세션·업로드(W2) → OCR 결과 수신(W3) → 그에 반응하는 streak/stats/quest(W4–W5). OCR 워커 콜백 payload 계약은 W2~W3 경계에서 워커 팀과 먼저 합의.
+**핵심 의존 사슬**: 인증·스키마(W1) → 세션·업로드(W2) → Gemini 유사도 결과(W3) → 그에 반응하는 streak/stats/quest(W4–W5). Gemini 프롬프트·응답 스키마·통과 임계치는 W2~W3 경계에서 확정한다.
 
 ---
 
 ## 열린 질문 (결정 필요)
 
-1. **유사도 통과 임계치**: 초안 85%. 한국어 손글씨 PaddleOCR 정확도 실측 전 미확정. 정규화(공백/문장부호/자모 오인식 허용) 규칙, 임계치를 상수 vs 환경설정/DB(난이도별)로 둘지.
+1. **유사도 통과 임계치 + Gemini 계약**: 초안 85%. Gemini 한국어 손글씨 판정 편차 실측 전 미확정. Gemini에 보낼 프롬프트·기대 응답 스키마(전사/유사도 형식), 정규화(공백/문장부호 허용) 규칙, 임계치를 상수 vs 환경설정/DB(난이도별)로 둘지.
 2. **streak freeze 규칙**: 적립 조건(예: 7일 연속 시 1개), 주당/총 보유 상한, 미작성일 자동 소모 여부·순서.
 3. **시각화 지표 매핑**: 별 밝기/크기/색이 어떤 데이터(유사도/글자수/연속일/감정태그)에 대응하는지. 현재 `best_similarity`,`total_char_count` 후보 선반영.
 4. **감정 태그 8종 확정 + 추천 알고리즘**: 태그 목록, 추천 방식(태그 필터 랜덤 vs 가중치 vs 이력 기반), daily verse 전역 vs 개인화.

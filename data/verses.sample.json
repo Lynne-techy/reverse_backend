@@ -4,5 +4,5 @@
   { "translation_code": "SAMPLE", "book_no": 19, "book_name": "시편", "chapter": 119, "verse_no": 105, "text": "샘플 구절 — 시편 119편 105절 (필사 흐름 검증용 임시 데이터)" },
   { "translation_code": "SAMPLE", "book_no": 43, "book_name": "요한복음", "chapter": 3, "verse_no": 16, "text": "샘플 구절 — 요한복음 3장 16절 (저작권 없는 자체 작성 placeholder)" },
   { "translation_code": "SAMPLE", "book_no": 45, "book_name": "로마서", "chapter": 8, "verse_no": 28, "text": "샘플 구절 — 로마서 8장 28절 (미니 시드, 이후 전체 성경으로 확장)" },
-  { "translation_code": "SAMPLE", "book_no": 50, "book_name": "빌립보서", "chapter": 4, "verse_no": 13, "text": "샘플 구절 — 빌립보서 4장 13절 (OCR stub 단계에서는 내용 무관)" }
+  { "translation_code": "SAMPLE", "book_no": 50, "book_name": "빌립보서", "chapter": 4, "verse_no": 13, "text": "샘플 구절 — 빌립보서 4장 13절 (유사도 stub 단계에서는 내용 무관)" }
 ]

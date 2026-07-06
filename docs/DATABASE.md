@@ -17,7 +17,7 @@
 | 네이밍 | 테이블·컬럼 `snake_case`, 복수형 테이블명 | Postgres/Supabase 관례 |
 | PK | 사용자 관련은 `uuid`, 대량 참조 데이터(성경 구절)는 `bigint` | uuid는 노출/분산에 안전, 구절은 수만 행이라 정수가 조회·용량 효율적 |
 | 시간 | 모두 `timestamptz` (UTC 저장) | 타임존 버그 예방 |
-| 점수 | `numeric(5,2)` (0.00~100.00) | 유사도/OCR 점수를 소수 둘째자리까지 |
+| 점수 | `numeric(5,2)` (0.00~100.00) | Gemini 유사도 점수를 소수 둘째자리까지 |
 
 > 💡 **왜 `uuid`와 `bigint`를 섞나요?** 사용자 ID는 URL·토큰에 실려 외부에 노출되므로 순차 정수(1,2,3…)면 "몇 명인지" "다음 사용자" 등이 추측됩니다. 그래서 uuid. 반면 성경 구절은 내부 참조용 대량 데이터라 추측 위험이 없고, 정수가 인덱스/조인에 더 가볍습니다.
 
@@ -39,7 +39,6 @@ erDiagram
     verses ||--o{ verse_emotion_tags : "감정 태그"
     emotion_tags ||--o{ verse_emotion_tags : "태그"
 
-    writing_sessions ||--|| ocr_jobs : "OCR 잡 1:1"
     quests ||--o{ user_quests : "정의"
 
     users {
@@ -63,8 +62,8 @@ erDiagram
         bigint verse_id FK
         text object_key "이미지 스토리지 키"
         text status
-        numeric ocr_score
-        numeric similarity_score
+        text recognized_text "Gemini 전사"
+        numeric similarity_score "Gemini 유사도"
         boolean passed
     }
     user_statistics {
@@ -148,17 +147,16 @@ erDiagram
 | verse_id | bigint | FK→verses | 어떤 구절을 |
 | object_key | text | not null | 업로드된 이미지의 스토리지 키 |
 | status | text | default `pending` | `pending`→`uploaded`→`processing`→`completed`/`failed` |
-| ocr_text | text | null | OCR이 읽어낸 텍스트 |
-| ocr_score | numeric(5,2) | null | OCR 신뢰도 |
-| similarity_score | numeric(5,2) | null | 원문과의 유사도 |
-| passed | boolean | null | 통과 여부 |
+| recognized_text | text | null | Gemini가 이미지에서 읽어낸 전사 텍스트 |
+| similarity_score | numeric(5,2) | null | Gemini가 매긴 원문과의 유사도 (0~100) |
+| passed | boolean | null | 통과 여부 (유사도 ≥ 임계치) |
 | created_at / completed_at | timestamptz | | |
 
 - **인덱스**: `(user_id, created_at desc)` — 내 기록 목록 조회용.
 
-> 💡 **왜 이미지 URL이 아니라 `object_key`인가?** 이미지는 OCI Object Storage에 저장되고, 접근할 때마다 서명된 임시 URL을 발급합니다. URL은 만료되므로 DB엔 **변하지 않는 키**만 저장하는 게 안전합니다.
+> 💡 **왜 이미지 URL이 아니라 `object_key`인가?** 이미지는 Object Storage에 저장되고, 접근할 때마다 서명된 임시 URL을 발급합니다. URL은 만료되므로 DB엔 **변하지 않는 키**만 저장하는 게 안전합니다.
 
-> `ocr_jobs` 테이블은 **보류 상태**입니다 — 상세는 [6. 보류 항목](#6-보류-항목) 참고.
+> **결정 (2026-07-06)**: 필사 유사도 검사를 **별도 OCR 워커(PaddleOCR) → Gemini API 직접 호출**로 변경했습니다. NestJS 백그라운드 잡이 `uploaded` 세션을 클레임(→`processing`)해 Gemini를 호출하고, 결과(`recognized_text`/`similarity_score`)를 저장한 뒤 통과 판정합니다. 이에 따라 `ocr_score`(OCR 신뢰도) 컬럼을 제거하고 `ocr_text`를 `recognized_text`로 이름을 바꿨습니다 (마이그레이션 `20260706000000_gemini_similarity.sql`). 별도 잡 큐 테이블(`ocr_jobs`)은 불필요 — [6. 보류/폐기 항목](#6-보류폐기-항목) 참고.
 
 ### 3-4. 습관 / 통계
 
@@ -179,7 +177,7 @@ erDiagram
 | activity_date | date | (PK) |
 | count | int | 그날 통과한 필사 수 (잔디 진하기 결정) |
 
-> **결정 (2026-07-05)**: MVP는 잔디(횟수 기반)만 구현합니다. 별(밤하늘) 시각화 관련 컬럼은 **보류 상태** — [6. 보류 항목](#6-보류-항목) 참고.
+> **결정 (2026-07-05)**: MVP는 잔디(횟수 기반)만 구현합니다. 별(밤하늘) 시각화 관련 컬럼은 **보류 상태** — [6. 보류/폐기 항목](#6-보류폐기-항목) 참고.
 
 > 💡 **왜 `user_statistics`와 `user_daily_activity`를 나누나?** 하나는 "현재 상태 요약"(streak 몇 일, 총 몇 회 — 사용자당 **1행**), 다른 하나는 "날짜별 히스토리"(잔디 그리려면 하루당 **1행**)입니다. 성격이 달라서 나눠야 조회가 깔끔합니다.
 
@@ -200,13 +198,13 @@ erDiagram
 | **MVP (먼저)** | users, verses, daily_verses, writing_sessions, user_statistics, user_daily_activity, streak_freeze_events |
 | **이후** | emotion_tags, verse_emotion_tags(추천), quests, user_quests(게임화) |
 
-> MVP 7개 테이블은 `supabase/migrations/20260705000000_init_schema.sql`에 작성 완료되었습니다. 보류 항목은 → [6. 보류 항목](#6-보류-항목).
+> MVP 7개 테이블은 `supabase/migrations/20260705000000_init_schema.sql`에 작성 완료되었습니다. 보류 항목은 → [6. 보류/폐기 항목](#6-보류폐기-항목).
 
 ---
 
 ## 5. 팀 논의가 필요한 열린 질문
 
-1. **유사도 통과 임계치**: 초안 85%. 한국어 손글씨는 OCR 정확도가 들쭉날쭉해서 실측 후 조정 필요. 임계치를 코드 상수로 둘지, 설정값/구절 난이도별로 둘지?
+1. **유사도 통과 임계치**: 초안 85%. Gemini의 한국어 손글씨 판정 편차를 실측 후 조정 필요. 임계치를 코드 상수로 둘지, 설정값/구절 난이도별로 둘지?
 2. **streak 보호권(freeze) 규칙**: 며칠 연속하면 몇 개 지급? 주당/총 상한? 빠진 날 자동 소모할지?
 3. **시각화 지표**: 밤하늘 별의 밝기/크기/색을 각각 어떤 데이터에 연결할지 (유사도? 글자수? 연속일?). → 저장할 컬럼이 달라짐. **MVP는 잔디(횟수)만 구현, 별 관련 컬럼은 확정 후 추가 예정.**
 4. **오늘의 말씀 방식**: 전역 공통 vs 감정 기반 개인화? (`daily_verses` PK 구조가 바뀜)
@@ -215,12 +213,12 @@ erDiagram
 
 ---
 
-## 6. 보류 항목
+## 6. 보류/폐기 항목
 
 방식/기준이 아직 확정되지 않아 스키마 구현을 미룬 항목들입니다. 각 항목은 확정될 때 별도 마이그레이션으로 추가합니다.
 
-#### `ocr_jobs` — OCR 비동기 잡
-OCR은 별도 파이썬 워커가 처리할 예정이라, API ↔ 워커 연동 방식이 **아직 확정되지 않았습니다**. 스키마는 초안만 잡아두고 실제 구현은 방식 확정 후로 미룹니다. (예상 컬럼: `session_id`, `object_key`, `verse_id`, `status`, `attempts`…) → 확정 조건: 워커 연동 방식(폴링/큐/웹훅) 결정.
+#### ~~`ocr_jobs` — OCR 비동기 잡~~ **(폐기, 2026-07-06)**
+당초 별도 파이썬 OCR 워커와의 잡 큐 연동을 위해 설계했으나, **유사도 검사를 Gemini API 직접 호출로 변경**하면서 폐기했습니다. Gemini를 NestJS가 직접 호출하므로 크로스-프로세스 조율용 잡 테이블이 필요 없고, 비동기 처리는 `writing_sessions.status`(`uploaded`→`processing`→`completed`/`failed`)를 잡 상태로 삼아 인프로세스로 수행합니다.
 
 #### 별(밤하늘) 시각화 컬럼
 `user_daily_activity`에 유사도·글자수 기반 컬럼(`best_similarity`, `total_char_count` 등)을 추가할지는 열린 질문 ③(시각화 지표)이 확정된 후 결정합니다. MVP는 잔디(횟수) 시각화만 구현합니다. → 확정 조건: 별의 밝기/크기/색이 어떤 지표에 연결되는지 결정.

@@ -34,7 +34,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
  *   - 공백을 셀지 뺄지 (필사 난이도는 보통 '쓸 글자 수'라 공백 제외가 자연스러움)
  *   - 앞뒤 공백 trim, 개행/중복 공백 정규화 여부
  *   - (선택) 문장부호 포함 여부
- * 지금 정한 규칙은 나중에 OCR similarity 정규화 규칙과 일관돼야 합니다(ARCHITECTURE 열린질문 1번).
+ * 지금 정한 규칙은 나중에 Gemini 유사도 정규화 규칙과 일관돼야 합니다(ARCHITECTURE 열린질문 1번).
  * 반환: 음이 아닌 정수.
  */
 function computeCharCount(text) {
