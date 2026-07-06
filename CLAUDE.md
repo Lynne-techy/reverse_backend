@@ -1,0 +1,20 @@
+# CLAUDE.md
+
+Claude Code가 이 프로젝트 디렉터리에서 세션을 시작할 때마다 자동으로 읽는 프로젝트 메모리입니다.
+
+## 세션 시작 시
+1. `docs/PROGRESS.md`를 먼저 읽고 현재 상태·완료된 것·다음에 할 일을 파악한다.
+2. 필요하면 `docs/DATABASE.md`(DB 모델링), `docs/ARCHITECTURE.md`(초기 설계 계획)도 참고한다.
+
+## 세션 종료 전
+의미 있는 진행이 있었다면 `docs/PROGRESS.md`를 갱신한다. **간결하게 유지** — 한두 줄 요약 위주로 쓰고,
+"최근 세션" 항목이 늘어나면 오래된 항목은 "완료" 요약에 흡수시키고 지운다. 상세 설계 배경은
+`docs/DATABASE.md`/`docs/ARCHITECTURE.md`나 git log에 맡긴다.
+
+## 아키텍처
+이 프로젝트는 **controller/service/repository 단순 구조**를 따른다(표준 4계층 클린 아키텍처 아님).
+사용자가 NestJS를 처음 접해 학습 목적으로 단순화하기로 결정했다. 상세는 `docs/ARCHITECTURE.md` 참고.
+문서와 실제 코드(`src/modules/*`)가 어긋나면 실제 코드를 따르고, 발견 시 문서를 갱신한다.
+
+## 커밋 컨벤션
+[Conventional Commits](https://www.conventionalcommits.org/) 1.0.0을 따른다.
