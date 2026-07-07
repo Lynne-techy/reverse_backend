@@ -17,6 +17,8 @@ export const envSchema = z.object({
   // JWKS 검증에 사용할 Supabase Auth 발급자(issuer) 및 JWKS 엔드포인트.
   // 보통 `${SUPABASE_URL}/auth/v1`.
   SUPABASE_JWT_ISSUER: z.url(),
+  // 필사 이미지를 저장하는 Storage 버킷 이름 (Private, presigned URL로만 접근).
+  SUPABASE_STORAGE_BUCKET: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;

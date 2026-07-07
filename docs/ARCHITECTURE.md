@@ -143,6 +143,8 @@ Index: `(user_id, created_at desc)`, `status`. 타입: `writing-session.types.ts
 
 PK: `(user_id, activity_date)`. 시각화 지표 매핑은 열린 질문 — 후보 컬럼을 선반영해 스키마 변경 없이 대응.
 
+`activity_date`는 서버 UTC 날짜 기준으로 기록한다(사용자별 타임존 반영은 추후 과제).
+
 ### A-10. streak_freeze_events (freeze 적립/사용 이력)
 | 컬럼 | 타입 | 제약 |
 |---|---|---|
