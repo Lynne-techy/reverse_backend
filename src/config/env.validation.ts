@@ -17,6 +17,8 @@ export const envSchema = z.object({
   // JWKS 검증에 사용할 Supabase Auth 발급자(issuer) 및 JWKS 엔드포인트.
   // 보통 `${SUPABASE_URL}/auth/v1`.
   SUPABASE_JWT_ISSUER: z.url(),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
 });
 
 export type Env = z.infer<typeof envSchema>;
