@@ -67,7 +67,6 @@ src/
 | chapter | smallint | not null |
 | verse_no | smallint | not null |
 | text | text | not null |
-| char_count | int | not null (유사도/난이도 캐시) |
 | created_at | timestamptz | default now() |
 
 Unique: `(translation_code, book_no, chapter, verse_no)`. 타입: `verse.types.ts`의 `Verse`. 다중 절 지원은 열린 질문(§열린 질문).
@@ -99,7 +98,7 @@ PK: `(verse_id, tag_code)`. Index: `(tag_code, weight desc)`.
 | verse_id | bigint | FK→verses, not null |
 | created_at | timestamptz | default now() |
 
-**권장: 전역 배정**(모든 사용자 동일) — "선택 부담 제거" 취지 부합, 캐시/공유 용이. 개인화 추천은 별도 API로 분리. 개인화 확정 시 PK를 `(user_id, activity_date)`로 확장.
+**전역 배정**(모든 사용자 동일) — "선택 부담 제거" 취지 부합, 캐시/공유 용이. `activity_date`는 서버가 타임존을 계산하지 않고 클라이언트가 보낸 로컬 날짜 문자열을 그대로 키로 쓴다(`GET /verses/today?date=YYYY-MM-DD`). 없으면 `verses` 중 랜덤 배정 후 insert. 콘텐츠성 데이터라 클라이언트 제공 값을 그대로 신뢰해도 무방하다(streak과 달리 조작 리스크 없음).
 
 ### A-6. writing_sessions (필사 1회 기록)
 | 컬럼 | 타입 | 제약 |
@@ -143,6 +142,8 @@ Index: `(user_id, created_at desc)`, `status`. 타입: `writing-session.types.ts
 | total_char_count | int | default 0 (별 크기 매핑 후보) |
 
 PK: `(user_id, activity_date)`. 시각화 지표 매핑은 열린 질문 — 후보 컬럼을 선반영해 스키마 변경 없이 대응.
+
+`activity_date`는 서버 UTC 날짜 기준으로 기록한다(사용자별 타임존 반영은 추후 과제).
 
 ### A-10. streak_freeze_events (freeze 적립/사용 이력)
 | 컬럼 | 타입 | 제약 |

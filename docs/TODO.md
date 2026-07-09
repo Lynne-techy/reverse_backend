@@ -25,6 +25,7 @@
 - [ ] `[슬라이스]` `CreateWritingSession` — `object_key` + `verse_id`로 세션 생성 (`POST /writings`)
 - [ ] `[슬라이스]` 유사도 **stub** — 세션 생성 시 무조건 통과 처리(Gemini 호출 붙일 seam만 남김)
 - [ ] `[MVP]` **Gemini 유사도 검사 연동** — 백그라운드 잡이 `uploaded` 세션 클레임(→`processing`) → `GeminiClient`로 이미지+원문 비교 → `recognized_text`/`similarity_score` 저장 → 통과 판정(`applySimilarityResult`) → `completed`/`failed`
+  - **이미지 전달 방식(주의)**: Gemini에 Supabase의 signed read URL을 넘겨선 안 됨. Gemini API의 이미지 입력은 `inline_data`(base64 바이트) 또는 Google 스토리지 참조(Files API URI / Vertex의 `gs://`)만 받고, 임의의 외부 HTTPS URL은 이미지 입력으로 못 받는다(프롬프트에 URL을 텍스트로 넣으면 모델이 fetch하지 않고 문자열로만 인식 → 할루시네이션 위험). → **서버가 `object_key`로 Storage에서 바이트를 직접 download 후 base64 inline으로 전달.** private 버킷 폐쇄성 유지 + Gemini가 Supabase에 접근할 필요 없음. (`url_context` 도구는 웹페이지 grounding용이라 이 용도엔 부적합.)
 - [ ] `[MVP]` 세션 상태/결과 폴링 조회 (`GET /writings/:id`)
 - [ ] `[MVP]` 내 필사 목록 조회 (`listMyWritings`, `(user_id, created_at desc)` 인덱스 활용)
 
