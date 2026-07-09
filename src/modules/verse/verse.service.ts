@@ -27,4 +27,22 @@ export class VerseService {
     const assigned = await this.verseRepository.findDailyVerseByDate(date);
     return assigned ?? candidate;
   }
+
+  /** id로 단일 verse 조회 (없으면 null). writing 모듈의 key verse 검증에 쓰인다. */
+  findById(id: number): Promise<Verse | null> {
+    return this.verseRepository.findById(id);
+  }
+
+  /**
+   * 같은 책·장 안의 절 범위를 조회한다. 클라이언트가 key verse를 고르도록
+   * 각 절을 화면에 뿌리는 용도. from>to면 컨트롤러(DTO)에서 이미 걸러진다.
+   */
+  getRange(
+    bookNo: number,
+    chapter: number,
+    from: number,
+    to: number,
+  ): Promise<Verse[]> {
+    return this.verseRepository.findRange(bookNo, chapter, from, to);
+  }
 }

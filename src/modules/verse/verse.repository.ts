@@ -38,6 +38,46 @@ export class VerseRepository {
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
   ) {}
 
+  /** id로 단일 verse 조회 (없으면 null). */
+  async findById(id: number): Promise<Verse | null> {
+    const { data, error } = await this.supabase
+      .from('verses')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle<VerseRow>();
+
+    if (error) {
+      throw new Error(`verse 조회 실패: ${error.message}`);
+    }
+    return data ? toVerse(data) : null;
+  }
+
+  /**
+   * 같은 책·장 안에서 verse_no가 [from, to]에 드는 절들을 오름차순으로 조회한다.
+   * (번역본이 여러 개가 되면 translationCode로 좁혀야 하나, 현재는 단일 번역본.)
+   */
+  async findRange(
+    bookNo: number,
+    chapter: number,
+    from: number,
+    to: number,
+  ): Promise<Verse[]> {
+    const { data, error } = await this.supabase
+      .from('verses')
+      .select('*')
+      .eq('book_no', bookNo)
+      .eq('chapter', chapter)
+      .gte('verse_no', from)
+      .lte('verse_no', to)
+      .order('verse_no', { ascending: true })
+      .returns<VerseRow[]>();
+
+    if (error) {
+      throw new Error(`구절 범위 조회 실패: ${error.message}`);
+    }
+    return (data ?? []).map(toVerse);
+  }
+
   /** 주어진 날짜에 배정된 오늘의 말씀 조회 (없으면 null). */
   async findDailyVerseByDate(date: string): Promise<Verse | null> {
     const { data, error } = await this.supabase
