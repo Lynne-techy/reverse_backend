@@ -3,13 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../../common/supabase/supabase.constants';
 import type { Env } from '../../config/env.validation';
-import { WritingSession, WritingSessionStatus } from './writing.types';
+import {
+  WritingLanguage,
+  WritingSession,
+  WritingSessionStatus,
+} from './writing.types';
 
 /** public.writing_sessions 테이블의 행(snake_case). */
 interface WritingSessionRow {
   id: string;
   user_id: string;
   verse_id: number;
+  language: WritingLanguage;
   object_key: string;
   status: WritingSessionStatus;
   recognized_text: string | null;
@@ -25,6 +30,7 @@ function toWritingSession(row: WritingSessionRow): WritingSession {
     id: row.id,
     userId: row.user_id,
     verseId: row.verse_id,
+    language: row.language,
     objectKey: row.object_key,
     status: row.status,
     recognizedText: row.recognized_text,
@@ -53,6 +59,7 @@ export class WritingRepository {
     id: string;
     userId: string;
     verseId: number;
+    language: WritingLanguage;
     objectKey: string;
   }): Promise<WritingSession> {
     const { data, error } = await this.supabase
@@ -61,13 +68,16 @@ export class WritingRepository {
         id: input.id,
         user_id: input.userId,
         verse_id: input.verseId,
+        language: input.language,
         object_key: input.objectKey,
       })
       .select('*')
       .single<WritingSessionRow>();
 
     if (error || !data) {
-      throw new Error(`필사 세션 생성 실패: ${error?.message ?? '데이터 없음'}`);
+      throw new Error(
+        `필사 세션 생성 실패: ${error?.message ?? '데이터 없음'}`,
+      );
     }
     return toWritingSession(data);
   }
@@ -115,13 +125,17 @@ export class WritingRepository {
   }
 
   /** 주어진 object_key 경로에 대한 업로드용 presigned URL을 발급한다. */
-  async createSignedUploadUrl(objectKey: string): Promise<{ signedUrl: string }> {
+  async createSignedUploadUrl(
+    objectKey: string,
+  ): Promise<{ signedUrl: string }> {
     const { data, error } = await this.supabase.storage
       .from(this.bucket)
       .createSignedUploadUrl(objectKey);
 
     if (error || !data) {
-      throw new Error(`업로드 URL 발급 실패: ${error?.message ?? '데이터 없음'}`);
+      throw new Error(
+        `업로드 URL 발급 실패: ${error?.message ?? '데이터 없음'}`,
+      );
     }
     return { signedUrl: data.signedUrl };
   }

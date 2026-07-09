@@ -7,7 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { StatsService } from '../stats/stats.service';
 import { WritingRepository } from './writing.repository';
-import { WritingSession } from './writing.types';
+import { WritingLanguage, WritingSession } from './writing.types';
 
 @Injectable()
 export class WritingService {
@@ -20,6 +20,7 @@ export class WritingService {
   async createUploadUrl(
     userId: string,
     verseId: number,
+    language: WritingLanguage,
   ): Promise<{ sessionId: string; objectKey: string; uploadUrl: string }> {
     const sessionId = randomUUID();
     const objectKey = `${userId}/${sessionId}.jpg`;
@@ -28,6 +29,7 @@ export class WritingService {
       id: sessionId,
       userId,
       verseId,
+      language,
       objectKey,
     });
     const { signedUrl } =

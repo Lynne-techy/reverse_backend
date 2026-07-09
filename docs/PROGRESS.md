@@ -37,11 +37,17 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [x] ③ 미니 시드(`scripts/seed-verses.mjs`, verses 6건 적재). `char_count` 컬럼은 미사용 판단으로 제거(`20260707000000_drop_verses_char_count.sql`)
 - [x] ④-1 `verse` 모듈: `GET /verses/today?date=YYYY-MM-DD`. 전역 공통 배정, 서버는 타임존 계산 없이 클라이언트가 보낸 로컬 날짜를 그대로 키로 사용(streak과 달리 조작 리스크 없는 콘텐츠성 데이터라 신뢰). 동시성은 upsert+ignoreDuplicates로 처리. mock 토큰으로 정상/재조회 고정/400/401 케이스 검증 완료.
 - [x] ④-2 `writing` 모듈: `POST /writing-sessions/upload-url`(presigned URL 발급+세션 생성), `POST /writing-sessions/:id/complete`(유사도 검사 stub — 항상 통과). Storage 버킷 `writing-images`(private) 연동. 정상/중복완료(409)/소유권없음(403)/미존재세션(404) 케이스 검증 완료.
-- [ ] ④-3 `stats` 모듈(streak/잔디) → ⑤ Dockerfile/.env.example 배포 인계
+- [~] ④-3 `stats` 모듈(streak/잔디) — **구현 완료, 아직 커밋 안 함**. `GET /stats/me`, `GET /stats/activity?from&to`. streak 계산은 `streak-calculator.ts` 순수 함수로 분리(연속/끊김/첫필사/같은날 멱등). 필사 통과 시 `writing.service.complete()`가 `StatsService.recordWriting(userId, UTC오늘)` 호출 → 잔디 +1 + streak 갱신. curl로 첫필사(streak 1)·같은날 재필사(streak 유지, total/잔디 +1) 검증 완료. **미검증 경로**: 연속(+1)·끊김(리셋) — 하루 대기/`last_written_date` 조작 필요.
+  - **다음 세션 할 일**: ① `streak-calculator` jest 단위테스트(연속/끊김/미래날짜 케이스) ② PROGRESS 갱신 후 **커밋**(현재 stats 모듈 전체 + app/writing 배선 + `docs/POSTMAN_TEST.md`가 uncommitted). 사용자가 포스트맨 수동 테스트를 먼저 해본 뒤 ①②로 이어가기로 함.
 - [x] streak/잔디의 타임존은 MVP 범위에서 서버 UTC로 단순화 결정(`docs/DATABASE.md` §user_daily_activity 결정 참고). 사용자별 타임존 반영은 추후 과제.
+- [ ] (백로그) 구절 목록 조회 API(`GET /verses`) — 프론트 "구절 고르기"용. 현재 없어 `docs/POSTMAN_TEST.md`엔 verseId(1~6) 하드코딩.
+- [ ] (다음 증분) 필사 **절 범위**(start/end verse) + `key_verse_id` — 프로토타입엔 있으나 백엔드 미구현. key verse는 "범위 중 한 절"이라 범위와 한 몸이므로 함께.
+- [ ] (미정) QT(묵상/적용/기도) — 프로토타입은 자유 텍스트지만 UX상 태그 제안형 검토 중. 방식 확정 후 태그 마스터/조인 테이블.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-09: 프론트 프로토타입(필사 흐름)과 백엔드 수직 슬라이스 비교 → 격차 도출(절 범위/언어/key verse/QT/유사도 실체/도트맵). 이번 증분은 **언어 하나만**: `writing_sessions.language`(ko/en, bilingual 제외) 추가. DTO `@IsIn` + DB `not null` + `check` 이중 방어선(사용자 입력이라). 기존 세션 행 truncate 후 not null 추가(타입 non-null과 정합). 마이그레이션 `20260709000000_writing_session_language.sql` 원격 적용, POSTMAN 400/201/400 검증. 범위·key verse·QT는 백로그로.
+- 2026-07-08: `stats` 모듈 구현(위 ④-3 참조). streak-calculator 순수함수는 사용자가 직접 작성(첫필사 off-by-one 버그 잡고 미래날짜 throw 정리). 필사→잔디 관통 curl 검증. `docs/POSTMAN_TEST.md`(임시 수동테스트 가이드) 추가. **아직 커밋 안 함** — 다음 세션에 단위테스트+커밋.
 - 2026-07-07: `writing` 모듈 구현+검증 완료(위 참조). Swagger로 API 문서화. `verse` 모듈 구현+검증 완료. 브랜치를 `feat/w2-verse-writing-streak`로 분리.
 - 2026-07-06: **유사도 검사 방침 변경** — 별도 Python OCR 워커 → **Gemini API 직접 호출**(NestJS 인프로세스 백그라운드 잡, 비동기+폴링). 새 마이그레이션 `20260706000000_gemini_similarity.sql`(writing_sessions: `ocr_score` 드롭, `ocr_text`→`recognized_text`). ARCHITECTURE/DATABASE/TODO 문서 반영, `ocr_jobs` 폐기. **원격 적용 완료(`db push`).**
 - 2026-07-06: 수직 슬라이스 전략·결정 확정(위 참조). Supabase CLI 설치+`supabase init`

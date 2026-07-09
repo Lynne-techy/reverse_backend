@@ -23,7 +23,11 @@ export class WritingController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateWritingSessionDto,
   ): Promise<{ sessionId: string; objectKey: string; uploadUrl: string }> {
-    return this.writingService.createUploadUrl(user.userId, dto.verseId);
+    return this.writingService.createUploadUrl(
+      user.userId,
+      dto.verseId,
+      dto.language,
+    );
   }
 
   /** POST /writing-sessions/:id/complete — 업로드 완료 처리 */

@@ -144,6 +144,7 @@ erDiagram
 | id | uuid | PK | |
 | user_id | uuid | FK→users | 누가 |
 | verse_id | bigint | FK→verses | 어떤 구절을 |
+| language | text | not null | 필사 언어 (`ko`/`en`) |
 | object_key | text | not null | 업로드된 이미지의 스토리지 키 |
 | status | text | default `pending` | `pending`→`uploaded`→`processing`→`completed`/`failed` |
 | recognized_text | text | null | Gemini가 이미지에서 읽어낸 전사 텍스트 |
@@ -154,6 +155,8 @@ erDiagram
 - **인덱스**: `(user_id, created_at desc)` — 내 기록 목록 조회용.
 
 > 💡 **왜 이미지 URL이 아니라 `object_key`인가?** 이미지는 Object Storage에 저장되고, 접근할 때마다 서명된 임시 URL을 발급합니다. URL은 만료되므로 DB엔 **변하지 않는 키**만 저장하는 게 안전합니다.
+
+> **결정 (2026-07-09)**: 프론트 프로토타입의 3개 필사 모드(한/영/**병행**) 중 **병행(bilingual)을 제외**하고 `language`를 `ko`·`en` 택1로 단순화했습니다. 병행이 요구하던 사진 2장이 사라져 `object_key` 1개 구조를 그대로 유지합니다. `language`는 이후 Gemini 유사도 검사가 **어느 번역본과 대조할지** 판단하는 근거로도 쓰입니다. 한편 프로토타입에 있는 **절 범위 선택**과 **key verse 지정**은 서로 한 몸(key verse는 "범위 중 한 절")이라 이번 증분에서 함께 제외했습니다 — 현재는 `verse_id` 단일이 곧 key verse이며, 범위는 → [열린 질문 ⑤](#5-팀-논의가-필요한-열린-질문)의 필사 단위 논의와 함께 다음 증분에서 다룹니다. (마이그레이션 `20260709000000_writing_session_language.sql`)
 
 > **결정 (2026-07-06)**: 필사 유사도 검사를 **별도 OCR 워커(PaddleOCR) → Gemini API 직접 호출**로 변경했습니다. NestJS 백그라운드 잡이 `uploaded` 세션을 클레임(→`processing`)해 Gemini를 호출하고, 결과(`recognized_text`/`similarity_score`)를 저장한 뒤 통과 판정합니다. 이에 따라 `ocr_score`(OCR 신뢰도) 컬럼을 제거하고 `ocr_text`를 `recognized_text`로 이름을 바꿨습니다 (마이그레이션 `20260706000000_gemini_similarity.sql`). 별도 잡 큐 테이블(`ocr_jobs`)은 불필요 — [6. 보류/폐기 항목](#6-보류폐기-항목) 참고.
 
