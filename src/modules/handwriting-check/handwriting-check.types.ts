@@ -8,6 +8,8 @@ export interface UploadedImageFile {
 export interface HandwritingCheckResult {
   isPenHandwriting: boolean;
   text: string | null;
+  similarityScore: number | null;
+  scriptureReference: string | null;
   confidence: 'low' | 'medium' | 'high';
   notes: string | null;
 }

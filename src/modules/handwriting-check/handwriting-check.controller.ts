@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Post,
   UploadedFile,
@@ -36,6 +37,7 @@ export class HandwritingCheckController {
   )
   async debugCheck(
     @UploadedFile() image?: UploadedImageFile,
+    @Body('originalText') originalText?: string,
   ): Promise<HandwritingCheckResult> {
     if (!image) {
       throw new BadRequestException('image 파일이 필요합니다.');
@@ -44,6 +46,14 @@ export class HandwritingCheckController {
       throw new BadRequestException('지원하지 않는 이미지 형식입니다.');
     }
 
-    return this.handwritingCheckService.checkAndLog(image);
+    const normalizedOriginalText = originalText?.trim();
+    if (!normalizedOriginalText) {
+      throw new BadRequestException('originalText가 필요합니다.');
+    }
+
+    return this.handwritingCheckService.checkAndLog(
+      image,
+      normalizedOriginalText,
+    );
   }
 }
