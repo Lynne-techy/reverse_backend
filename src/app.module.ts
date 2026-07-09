@@ -8,6 +8,7 @@ import { WritingModule } from './modules/writing/writing.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { DevModule } from './modules/dev/dev.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
+import { HandwritingCheckModule } from './modules/handwriting-check/handwriting-check.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     WritingModule,
     StatsModule,
     DevModule,
+    HandwritingCheckModule,
   ],
   controllers: [HealthController],
 })

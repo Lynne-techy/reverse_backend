@@ -19,6 +19,10 @@ export const envSchema = z.object({
   SUPABASE_JWT_ISSUER: z.url(),
   // 필사 이미지를 저장하는 Storage 버킷 이름 (Private, presigned URL로만 접근).
   SUPABASE_STORAGE_BUCKET: z.string().min(1),
+
+  // Gemini (손글씨 검사 / 유사도)
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
 });
 
 export type Env = z.infer<typeof envSchema>;
