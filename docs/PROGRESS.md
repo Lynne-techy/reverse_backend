@@ -40,12 +40,14 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [~] ④-3 `stats` 모듈(streak/잔디) — **구현 완료, 아직 커밋 안 함**. `GET /stats/me`, `GET /stats/activity?from&to`. streak 계산은 `streak-calculator.ts` 순수 함수로 분리(연속/끊김/첫필사/같은날 멱등). 필사 통과 시 `writing.service.complete()`가 `StatsService.recordWriting(userId, UTC오늘)` 호출 → 잔디 +1 + streak 갱신. curl로 첫필사(streak 1)·같은날 재필사(streak 유지, total/잔디 +1) 검증 완료. **미검증 경로**: 연속(+1)·끊김(리셋) — 하루 대기/`last_written_date` 조작 필요.
   - **다음 세션 할 일**: ① `streak-calculator` jest 단위테스트(연속/끊김/미래날짜 케이스) ② PROGRESS 갱신 후 **커밋**(현재 stats 모듈 전체 + app/writing 배선 + `docs/POSTMAN_TEST.md`가 uncommitted). 사용자가 포스트맨 수동 테스트를 먼저 해본 뒤 ①②로 이어가기로 함.
 - [x] streak/잔디의 타임존은 MVP 범위에서 서버 UTC로 단순화 결정(`docs/DATABASE.md` §user_daily_activity 결정 참고). 사용자별 타임존 반영은 추후 과제.
-- [ ] (백로그) 구절 목록 조회 API(`GET /verses`) — 프론트 "구절 고르기"용. 현재 없어 `docs/POSTMAN_TEST.md`엔 verseId(1~6) 하드코딩.
-- [ ] (다음 증분) 필사 **절 범위**(start/end verse) + `key_verse_id` — 프로토타입엔 있으나 백엔드 미구현. key verse는 "범위 중 한 절"이라 범위와 한 몸이므로 함께.
+- [x] 필사 **절 범위**(같은 장, start/end_verse_no) + `key_verse_id` + 범위 조회 `GET /verses?book&chapter&from&to`. (아래 최근 세션 참조)
+- [ ] (백로그) 구절 검색/목록 API 확장 — 현재 `GET /verses`는 같은 장 범위 조회만. 책/장 목록 등 브라우징은 이후.
 - [ ] (미정) QT(묵상/적용/기도) — 프로토타입은 자유 텍스트지만 UX상 태그 제안형 검토 중. 방식 확정 후 태그 마스터/조인 테이블.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-09: **흐름 A 반영** — 실제 UX상 key verse는 세션 생성이 아니라 이미지 업로드 후 "기록 저장"(complete) 때 정해짐. `key_verse_id`를 nullable로 바꾸고 complete 바디(`{keyVerseId}`)로 이동. 생성 시엔 앵커가 없어 `book_no`/`chapter`를 세션에 저장(범위 자립). upload-url 바디 `{book,chapter,startVerseNo,endVerseNo,language}`. 마이그레이션 `20260709020000_writing_session_defer_key_verse.sql`. **key verse가 세션 범위 안인지 검증은 사용자가 직접 작성 예정(complete의 TODO).** QT는 형식 미정이라 제외.
+- 2026-07-09: **필사 범위 + key verse** 도입. 필사 단위를 단일 절 → 같은 장 내 절 범위(`start_verse_no`/`end_verse_no`)로 확장하고, `verse_id`→`key_verse_id`(범위 중 대표 절, book/chapter 앵커) 이름변경. 범위는 경계 2컬럼으로 저장(1필사=1행=잔디 +1). 범위 조회 읽기 API `GET /verses?book&chapter&from&to` 추가(key verse 선택용). 마이그레이션 `20260709010000_writing_session_verse_range.sql`, 연속 절 시드(시23:1-6) 추가. upload-url 바디 `{keyVerseId,startVerseNo,endVerseNo,language}`. **범위 유효성 검증(key verse∈범위, start≤end)은 사용자가 직접 작성 예정(writing.service TODO).**
 - 2026-07-09: 프론트 프로토타입(필사 흐름)과 백엔드 수직 슬라이스 비교 → 격차 도출(절 범위/언어/key verse/QT/유사도 실체/도트맵). 이번 증분은 **언어 하나만**: `writing_sessions.language`(ko/en, bilingual 제외) 추가. DTO `@IsIn` + DB `not null` + `check` 이중 방어선(사용자 입력이라). 기존 세션 행 truncate 후 not null 추가(타입 non-null과 정합). 마이그레이션 `20260709000000_writing_session_language.sql` 원격 적용, POSTMAN 400/201/400 검증. 범위·key verse·QT는 백로그로.
 - 2026-07-08: `stats` 모듈 구현(위 ④-3 참조). streak-calculator 순수함수는 사용자가 직접 작성(첫필사 off-by-one 버그 잡고 미래날짜 throw 정리). 필사→잔디 관통 curl 검증. `docs/POSTMAN_TEST.md`(임시 수동테스트 가이드) 추가. **아직 커밋 안 함** — 다음 세션에 단위테스트+커밋.
 - 2026-07-07: `writing` 모듈 구현+검증 완료(위 참조). Swagger로 API 문서화. `verse` 모듈 구현+검증 완료. 브랜치를 `feat/w2-verse-writing-streak`로 분리.

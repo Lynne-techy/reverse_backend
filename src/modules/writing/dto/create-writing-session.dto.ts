@@ -4,10 +4,25 @@ import { WRITING_LANGUAGES } from '../writing.types';
 import type { WritingLanguage } from '../writing.types';
 
 export class CreateWritingSessionDto {
-  @ApiProperty({ example: 1, description: '필사할 verse의 id' })
+  @ApiProperty({ example: 19, description: '성경 책 번호 (1~66)' })
   @IsInt()
   @Min(1)
-  verseId!: number;
+  book!: number;
+
+  @ApiProperty({ example: 23, description: '장' })
+  @IsInt()
+  @Min(1)
+  chapter!: number;
+
+  @ApiProperty({ example: 1, description: '필사 범위 시작 절 번호 (같은 장 내)' })
+  @IsInt()
+  @Min(1)
+  startVerseNo!: number;
+
+  @ApiProperty({ example: 6, description: '필사 범위 종료 절 번호 (startVerseNo 이상)' })
+  @IsInt()
+  @Min(1)
+  endVerseNo!: number;
 
   @ApiProperty({
     enum: WRITING_LANGUAGES,

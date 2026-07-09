@@ -60,25 +60,10 @@ node --env-file=.env scripts/seed-mock-user.mjs
 
 ---
 
-## 2단계 — 필사할 성경 구절 고르기
+## 2단계 — 필사 세션 생성 (범위·언어 선택 + 업로드 URL 발급)
 
-오늘의 말씀이 아니라 **원하는 구절을 직접 골라** 필사합니다. 현재 시드된 구절(6건):
-
-| verseId | 구절 |
-|---|---|
-| 1 | 창세기 1:1 |
-| 2 | 시편 23:1 |
-| 3 | 시편 119:105 |
-| 4 | 요한복음 3:16 |
-| 5 | 로마서 8:28 |
-| 6 | 빌립보서 4:13 |
-
-아래 예시는 **1번(창세기 1:1)** 을 고른 경우입니다. 다른 번호로 바꿔도 됩니다.
-(없는 verseId를 넣으면 완료가 아니라 세션 생성 단계에서 실패합니다.)
-
----
-
-## 3단계 — 필사 세션 생성 + 업로드 URL 발급
+필사 단위는 **같은 장 안의 절 범위**입니다(예: 시편 23:1-6). 이 시점엔 범위와 언어만
+정하고, **key verse는 아직 안 고릅니다**(업로드 후 4단계에서 선택).
 
 | 항목 | 값 |
 |---|---|
@@ -89,11 +74,12 @@ node --env-file=.env scripts/seed-mock-user.mjs
 | Body | raw → JSON (아래) |
 
 ```json
-{ "verseId": 1, "language": "ko" }
+{ "book": 19, "chapter": 23, "startVerseNo": 1, "endVerseNo": 6, "language": "ko" }
 ```
 
-> `language`는 필사 언어로 `"ko"`(한국어) 또는 `"en"`(영어) 둘 중 하나입니다. 빠뜨리거나
-> 다른 값을 넣으면 세션 생성 단계에서 `400 Bad Request`가 납니다.
+> - `book`/`chapter`: 필사 범위의 책 번호·장.
+> - `startVerseNo`/`endVerseNo`: 절 범위(같은 장). `start <= end` 아니면 `400`.
+> - `language`: `"ko"` 또는 `"en"`. (누락/오값 `400`)
 
 **기대 응답 (201)**:
 ```json
@@ -110,9 +96,11 @@ node --env-file=.env scripts/seed-mock-user.mjs
 > pm.collectionVariables.set("session_id", pm.response.json().sessionId);
 > ```
 
-### (선택) 실제 이미지 업로드
+---
 
-완료 처리(4단계)는 현재 **유사도 검사 스텁**이라 실제 업로드 없이도 통과합니다.
+## 3단계 — (선택) 실제 이미지 업로드
+
+기록 저장(4단계)은 현재 **유사도 검사 스텁**이라 실제 업로드 없이도 통과합니다.
 그래도 진짜 필사 이미지를 올려보고 싶다면, 위 `uploadUrl`로 파일을 올립니다:
 
 | 항목 | 값 |
@@ -126,21 +114,50 @@ node --env-file=.env scripts/seed-mock-user.mjs
 
 ---
 
-## 4단계 — 필사 완료 처리
+## 4단계 — 범위 절 조회 → key verse 골라 기록 저장
+
+**4-1. 범위 절 목록 조회** — 클라이언트가 이 목록을 보여주고 사용자가 대표 절을 고릅니다.
+
+| 항목 | 값 |
+|---|---|
+| Method | `GET` |
+| URL | `{{base_url}}/verses?book=19&chapter=23&from=1&to=6` |
+| Auth | Bearer Token = `{{token}}` |
+
+**기대 응답 (200)**:
+```json
+[
+  { "id": 2, "verseNo": 1, "text": "…" },
+  { "id": 7, "verseNo": 2, "text": "…" },
+  … { "verseNo": 6 }
+]
+```
+이 중 대표로 고른 절(예: `verseNo` 4)의 `id`를 아래 `keyVerseId`로 씁니다.
+(id 값은 시드 상태에 따라 다르니 위 응답에서 실제 값을 확인하세요.)
+
+**4-2. 기록 저장(완료 처리)**
 
 | 항목 | 값 |
 |---|---|
 | Method | `POST` |
 | URL | `{{base_url}}/writing-sessions/{{session_id}}/complete` |
 | Auth | Bearer Token = `{{token}}` |
+| Headers | `Content-Type: application/json` |
+| Body | raw → JSON (아래) |
 
-> `{{session_id}}` 변수를 안 만들었다면 URL에 3단계에서 복사한 sessionId를 직접 넣으세요.
+```json
+{ "keyVerseId": 9 }
+```
+
+> `keyVerseId`는 세션의 범위(같은 책·장 + 1~6절) **안**의 절이어야 합니다.
+> 범위 밖 절이면 `400`, 없는 id면 `404`가 납니다.
 
 **기대 응답 (201)**:
 ```json
 {
   "id": "…sessionId…",
   "status": "completed",
+  "keyVerseId": 9,
   "recognizedText": "(stub) Gemini 연동 전 임시 통과 처리",
   "similarityScore": 100,
   "passed": true,
@@ -178,7 +195,8 @@ node --env-file=.env scripts/seed-mock-user.mjs
 
 | 시도 | 기대 결과 |
 |---|---|
-| 4단계를 **같은 sessionId로 두 번** 호출 | `409 Conflict` (이미 완료된 세션) |
+| 4-2를 **같은 sessionId로 두 번** 호출 | `409 Conflict` (이미 완료된 세션) |
 | 존재하지 않는 sessionId로 완료 호출 | `404 Not Found` |
-| `verseId`를 문자열/음수 등 잘못된 값으로 3단계 호출 | `400 Bad Request` |
+| 2단계에서 `startVerseNo > endVerseNo`(범위 뒤집힘) | `400 Bad Request` |
+| 4-2에서 범위 밖 절을 `keyVerseId`로 전달 | `400 Bad Request` |
 | Authorization 헤더 없이 아무 요청 | `401 Unauthorized` |

@@ -14,7 +14,12 @@ export type WritingLanguage = (typeof WRITING_LANGUAGES)[number];
 export interface WritingSession {
   id: string;
   userId: string;
-  verseId: number;
+  bookNo: number;
+  chapter: number;
+  startVerseNo: number;
+  endVerseNo: number;
+  /** 범위 중 대표 절. 생성 시엔 null이고 complete(기록 저장) 때 채워진다. */
+  keyVerseId: number | null;
   language: WritingLanguage;
   objectKey: string;
   status: WritingSessionStatus;

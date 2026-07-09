@@ -143,7 +143,11 @@ erDiagram
 |---|---|---|---|
 | id | uuid | PK | |
 | user_id | uuid | FK→users | 누가 |
-| verse_id | bigint | FK→verses | 어떤 구절을 |
+| book_no | smallint | not null | 필사 범위의 책 번호 (범위 앵커) |
+| chapter | smallint | not null | 필사 범위의 장 (범위 앵커) |
+| start_verse_no | smallint | not null | 필사 범위 시작 절 (같은 장 내) |
+| end_verse_no | smallint | not null | 필사 범위 종료 절 (`>= start_verse_no`) |
+| key_verse_id | bigint | FK→verses, **null 허용** | 범위 중 대표로 고른 절. 생성 시 null, `complete`(기록 저장) 때 채움 |
 | language | text | not null | 필사 언어 (`ko`/`en`) |
 | object_key | text | not null | 업로드된 이미지의 스토리지 키 |
 | status | text | default `pending` | `pending`→`uploaded`→`processing`→`completed`/`failed` |
@@ -156,7 +160,11 @@ erDiagram
 
 > 💡 **왜 이미지 URL이 아니라 `object_key`인가?** 이미지는 Object Storage에 저장되고, 접근할 때마다 서명된 임시 URL을 발급합니다. URL은 만료되므로 DB엔 **변하지 않는 키**만 저장하는 게 안전합니다.
 
-> **결정 (2026-07-09)**: 프론트 프로토타입의 3개 필사 모드(한/영/**병행**) 중 **병행(bilingual)을 제외**하고 `language`를 `ko`·`en` 택1로 단순화했습니다. 병행이 요구하던 사진 2장이 사라져 `object_key` 1개 구조를 그대로 유지합니다. `language`는 이후 Gemini 유사도 검사가 **어느 번역본과 대조할지** 판단하는 근거로도 쓰입니다. 한편 프로토타입에 있는 **절 범위 선택**과 **key verse 지정**은 서로 한 몸(key verse는 "범위 중 한 절")이라 이번 증분에서 함께 제외했습니다 — 현재는 `verse_id` 단일이 곧 key verse이며, 범위는 → [열린 질문 ⑤](#5-팀-논의가-필요한-열린-질문)의 필사 단위 논의와 함께 다음 증분에서 다룹니다. (마이그레이션 `20260709000000_writing_session_language.sql`)
+> **결정 (2026-07-09)**: 프론트 프로토타입의 3개 필사 모드(한/영/**병행**) 중 **병행(bilingual)을 제외**하고 `language`를 `ko`·`en` 택1로 단순화했습니다. 병행이 요구하던 사진 2장이 사라져 `object_key` 1개 구조를 그대로 유지합니다. `language`는 이후 Gemini 유사도 검사가 **어느 번역본과 대조할지** 판단하는 근거로도 쓰입니다. (마이그레이션 `20260709000000_writing_session_language.sql`)
+
+> **결정 (2026-07-09)**: 필사 단위를 **단일 절 → 같은 장 내 절 범위 + 대표 절(key verse)** 로 확장했습니다(→ [열린 질문 ⑤](#5-팀-논의가-필요한-열린-질문) 해소). `verse_id`를 `key_verse_id`로 이름을 바꿔 "범위 중 마음에 새긴 대표 절"을 가리키게 하고, 범위는 `start_verse_no`/`end_verse_no` **경계 두 컬럼**으로 표현합니다(절을 여러 행으로 펼치지 않음 → 한 필사 = 1행 = 잔디/`total_count` +1). 범위를 `start_verse_id`/`end_verse_id`(두 FK)가 아니라 **verse_no 범위**로 둔 이유: `verses.id`는 적재 순서라 연속성이 보장되지 않아 id 산술 범위가 엉뚱한 절을 포함할 수 있습니다. 같은 장 안 `verse_no` 범위로 조회하면 id 연속성에 의존하지 않습니다. 범위 절 목록은 `GET /verses?book&chapter&from&to`로 조회해 클라이언트가 key verse를 고릅니다. **여러 장에 걸친 범위는 제외**(MVP 단순화). (마이그레이션 `20260709010000_writing_session_verse_range.sql`)
+
+> **결정 (2026-07-09, 흐름 A)**: 실제 UX 흐름상 **key verse는 세션 생성이 아니라 이미지 업로드 후 "기록 저장"(complete) 시점에** 정해집니다(① 범위·언어 선택→세션 생성/URL 발급 → ② 이미지 업로드 → ③ 범위 절 나열→key verse 선택 → ④ QT → ⑤ 저장). 그래서 `key_verse_id`를 **nullable**로 바꾸고 `complete` 요청 바디에서 받습니다. 생성 시엔 key verse가 없어 그 앵커(book/chapter)를 못 쓰므로, 범위를 스스로 표현하도록 **`book_no`·`chapter`를 세션에 저장**합니다(`start/end_verse_no`는 상대 번호라 book/chapter 없이는 의미가 없음). 대표 절이 세션 범위(같은 책·장 + verse_no ∈ [start,end]) 안인지는 `complete`에서 검증합니다. QT(묵상/적용/기도)는 형식 미정이라 이번 `complete` 바디에선 제외(`keyVerseId`만). (마이그레이션 `20260709020000_writing_session_defer_key_verse.sql`)
 
 > **결정 (2026-07-06)**: 필사 유사도 검사를 **별도 OCR 워커(PaddleOCR) → Gemini API 직접 호출**로 변경했습니다. NestJS 백그라운드 잡이 `uploaded` 세션을 클레임(→`processing`)해 Gemini를 호출하고, 결과(`recognized_text`/`similarity_score`)를 저장한 뒤 통과 판정합니다. 이에 따라 `ocr_score`(OCR 신뢰도) 컬럼을 제거하고 `ocr_text`를 `recognized_text`로 이름을 바꿨습니다 (마이그레이션 `20260706000000_gemini_similarity.sql`). 별도 잡 큐 테이블(`ocr_jobs`)은 불필요 — [6. 보류/폐기 항목](#6-보류폐기-항목) 참고.
 

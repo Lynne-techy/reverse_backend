@@ -13,7 +13,11 @@ import {
 interface WritingSessionRow {
   id: string;
   user_id: string;
-  verse_id: number;
+  book_no: number;
+  chapter: number;
+  start_verse_no: number;
+  end_verse_no: number;
+  key_verse_id: number | null;
   language: WritingLanguage;
   object_key: string;
   status: WritingSessionStatus;
@@ -29,7 +33,11 @@ function toWritingSession(row: WritingSessionRow): WritingSession {
   return {
     id: row.id,
     userId: row.user_id,
-    verseId: row.verse_id,
+    bookNo: row.book_no,
+    chapter: row.chapter,
+    startVerseNo: row.start_verse_no,
+    endVerseNo: row.end_verse_no,
+    keyVerseId: row.key_verse_id,
     language: row.language,
     objectKey: row.object_key,
     status: row.status,
@@ -58,7 +66,10 @@ export class WritingRepository {
   async create(input: {
     id: string;
     userId: string;
-    verseId: number;
+    bookNo: number;
+    chapter: number;
+    startVerseNo: number;
+    endVerseNo: number;
     language: WritingLanguage;
     objectKey: string;
   }): Promise<WritingSession> {
@@ -67,7 +78,10 @@ export class WritingRepository {
       .insert({
         id: input.id,
         user_id: input.userId,
-        verse_id: input.verseId,
+        book_no: input.bookNo,
+        chapter: input.chapter,
+        start_verse_no: input.startVerseNo,
+        end_verse_no: input.endVerseNo,
         language: input.language,
         object_key: input.objectKey,
       })
@@ -98,6 +112,7 @@ export class WritingRepository {
   async markCompleted(
     id: string,
     result: {
+      keyVerseId: number;
       recognizedText: string;
       similarityScore: number;
       passed: boolean;
@@ -107,6 +122,7 @@ export class WritingRepository {
       .from('writing_sessions')
       .update({
         status: 'completed',
+        key_verse_id: result.keyVerseId,
         recognized_text: result.recognizedText,
         similarity_score: result.similarityScore,
         passed: result.passed,
