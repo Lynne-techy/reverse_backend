@@ -104,14 +104,13 @@ export class HandwritingCheckService {
       const parsed = JSON.parse(text) as Partial<HandwritingCheckResult>;
       return {
         isPenHandwriting: parsed.isPenHandwriting === true,
-        text: typeof parsed.text === 'string' ? parsed.text : null,
+        text: this.parseNullableString(parsed.text),
         similarityScore: this.parseSimilarityScore(parsed.similarityScore),
-        scriptureReference:
-          typeof parsed.scriptureReference === 'string'
-            ? parsed.scriptureReference
-            : null,
+        scriptureReference: this.parseNullableString(
+          parsed.scriptureReference,
+        ),
         confidence: this.parseConfidence(parsed.confidence),
-        notes: typeof parsed.notes === 'string' ? parsed.notes : null,
+        notes: this.parseNullableString(parsed.notes),
       };
     } catch {
       this.logger.warn(`Gemini response was not valid JSON: ${text}`);
@@ -132,6 +131,15 @@ export class HandwritingCheckService {
     }
 
     return Math.min(100, Math.max(0, value));
+  }
+
+  private parseNullableString(value: unknown): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   private parseConfidence(value: unknown): HandwritingCheckResult['confidence'] {
