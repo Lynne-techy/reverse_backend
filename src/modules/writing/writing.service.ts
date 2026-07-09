@@ -5,12 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { StatsService } from '../stats/stats.service';
 import { WritingRepository } from './writing.repository';
 import { WritingSession } from './writing.types';
 
 @Injectable()
 export class WritingService {
-  constructor(private readonly writingRepository: WritingRepository) {}
+  constructor(
+    private readonly writingRepository: WritingRepository,
+    private readonly statsService: StatsService,
+  ) {}
 
   /** 업로드용 presigned URL을 발급하고, 그 대상 경로로 세션을 만든다. */
   async createUploadUrl(
@@ -50,10 +54,18 @@ export class WritingService {
       throw new ConflictException('이미 완료 처리된 세션입니다.');
     }
 
-    return this.writingRepository.markCompleted(sessionId, {
+    const completed = await this.writingRepository.markCompleted(sessionId, {
       recognizedText: '(stub) Gemini 연동 전 임시 통과 처리',
       similarityScore: 100,
       passed: true,
     });
+
+    // 통과한 필사만 잔디/streak에 반영한다. 하루 경계는 서버 UTC 기준(MVP 단순화).
+    if (completed.passed) {
+      const todayUtc = new Date().toISOString().slice(0, 10);
+      await this.statsService.recordWriting(userId, todayUtc);
+    }
+
+    return completed;
   }
 }
