@@ -1,0 +1,30 @@
+# Re-Verse 로컬 개발용 결합 Compose (HTTP, 8080) — 프로덕션은 docker-compose.prod.yml
+# 사용법: 두 레포를 형제로 둔 상위 디렉터리(예: reverse/)에서
+#   cp back/reverse_backend/deploy/docker-compose.dev.yml docker-compose.yml
+#   docker compose up --build
+#   → http://localhost:8080       (프론트)
+#   → http://localhost:8080/api/… (백엔드, nginx 경유)
+# 전제: back/reverse_backend/.env 존재, front/reverse_app 체크아웃(Dockerfile 포함 브랜치).
+
+services:
+  api:
+    build:
+      context: ./back/reverse_backend
+    env_file:
+      - ./back/reverse_backend/.env
+    expose:
+      - "3000" # 내부 네트워크 전용 — nginx만 접근 (호스트 직접 노출 없음)
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./front/reverse_app
+    ports:
+      - "8080:80" # 로컬 충돌을 피해 8080. 프로덕션은 80/443 + TLS (prod.yml)
+    depends_on:
+      - api
+    restart: unless-stopped
+
+networks:
+  default:
+    name: re-verse
