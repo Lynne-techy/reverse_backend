@@ -4,6 +4,10 @@ coverage
 .git
 .env
 .env.*
+cert
+certs
+*.pem
+*.key
 *.log
 files.zip
 docs

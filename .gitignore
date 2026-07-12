@@ -43,6 +43,12 @@ lerna-debug.log*
 .env.local
 env.local
 
+# TLS 인증서/개인키 (Cloudflare Origin CA 등) — 절대 커밋 금지
+cert/
+certs/
+*.pem
+*.key
+
 # temp directory
 .temp
 .tmp
