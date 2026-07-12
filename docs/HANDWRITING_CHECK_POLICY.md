@@ -30,6 +30,20 @@ references, printed translations, and helper text belong in
 The service clamps numeric scores to `0-100`. Non-numeric scores are treated as
 `null` instead of being coerced.
 
+## Pass Criterion (writing flow)
+
+A writing session counts as `passed` only when **all** of these hold
+(`writing.service.ts`, threshold constant `PASS_MIN_SIMILARITY_SCORE`):
+
+- `isPenHandwriting` is `true`
+- `similarityScore` is not `null`
+- `similarityScore >= 60` — "recognizable same passage" is enough; a habit
+  tracker should not fail a streak over a few typos.
+
+A non-passing result still ends the session as `completed` (with
+`passed=false`). `failed` is reserved for check-infrastructure errors
+(storage/Gemini failure) and allows the user to retry `complete`.
+
 ## Defensive Cases
 
 - Missing Gemini text content returns a low-confidence null result.
