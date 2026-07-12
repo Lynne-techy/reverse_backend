@@ -1,0 +1,19 @@
+# Re-Verse 백엔드 전용 Compose (Option B)
+# API 컨테이너만 띄운다 (백엔드 단독 개발용).
+# nginx + React 프론트 결합 구동은 상위 레벨 compose 사용: ../../docker-compose.yml
+# (거기서는 api 가 ports 대신 expose 로 내부 노출만 된다.)
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "3000:3000" # 백엔드 단독 구동이므로 호스트에 직접 노출
+    restart: unless-stopped
+
+networks:
+  default:
+    name: re-verse
