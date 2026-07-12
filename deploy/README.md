@@ -24,7 +24,6 @@ gcloud config set project <프로젝트ID>
 gcloud compute addresses create reverse-ip --region=asia-northeast3
 
 # e2-small / 서울 / Ubuntu 24.04 / 디스크 30GB
-# http-server,https-server 태그 = default 네트워크의 80/443 허용 규칙
 gcloud compute instances create reverse-vm \
   --zone=asia-northeast3-a \
   --machine-type=e2-small \
@@ -33,6 +32,16 @@ gcloud compute instances create reverse-vm \
   --boot-disk-size=30GB \
   --address=reverse-ip \
   --tags=http-server,https-server
+
+# ⚠️ 80/443 방화벽 규칙은 직접 만들어야 한다. http-server 태그에 매칭되는
+#    default-allow-http/https 규칙은 콘솔 체크박스로 VM을 만들 때만 자동 생성됨
+#    (없으면 Cloudflare가 오리진에 못 붙어 522가 난다 — 2026-07-12 실측)
+gcloud compute firewall-rules create default-allow-http \
+  --network=default --direction=INGRESS --action=ALLOW \
+  --rules=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=http-server
+gcloud compute firewall-rules create default-allow-https \
+  --network=default --direction=INGRESS --action=ALLOW \
+  --rules=tcp:443 --source-ranges=0.0.0.0/0 --target-tags=https-server
 
 # (권장) SSH 22 포트를 내 IP로 제한하려면 default-allow-ssh 대신 커스텀 규칙 사용
 gcloud compute addresses describe reverse-ip --region=asia-northeast3 --format='get(address)'
