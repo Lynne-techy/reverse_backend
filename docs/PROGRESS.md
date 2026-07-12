@@ -4,8 +4,11 @@
 > git log / `docs/DATABASE.md` / `docs/ARCHITECTURE.md`에 있으니 여기엔 한두 줄 요약만 남긴다.
 
 ## 상태
-브랜치 `feat/w3-gemini-wiring` (2026-07-12 기준). **로컬에 `.env` 부재** — 부팅하려면
-Supabase 값 복원 필요(`.env.example` 참고), Gemini 키는 `.env.local`에 있음.
+`main` 최신 (2026-07-12, w3 브랜치 머지 완료). **블로커: Supabase 키 미확보** —
+로컬 `.env` 부재 + VM의 `.env`도 더미 값. 키만 채우면 VM 기동(런북 §5) 가능.
+인프라: GCE VM `reverse-vm`(서울, e2-small) + 도메인 `reverse-growthlog.com` +
+Cloudflare(프록시 ON, Full strict, Origin CA ~2041) **구축 완료, §5 기동 직전 상태**.
+쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
 기반구조·의존성, Auth/User 모듈(controller/service/repository 구조), DB 모델링 문서,
@@ -47,6 +50,7 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-12: **인프라 구축(런북 §1~§4 완료, 사용자 직접)** — GCP `reverse-502210`, VM `reverse-vm` 생성(최초 콘솔 생성분은 명명 불일치로 삭제 후 gcloud 재생성), TZ Seoul·스왑·Docker 확인, 코드 배치(`~/reverse/`), 도메인 `reverse-growthlog.com` + Origin CA(만료 2041-07-08) 설치, `docker compose config` 정합성 검증 통과. §5 기동은 Supabase 키 대기. **미완**: ufw/fail2ban/SSH 잠금(setup-vm.sh 일부), A레코드 프록시 ON·Full(strict) 재확인 필요. **발견 이슈(결정 대기)**: A) 2GB VM 자체 빌드 OOM 리스크 → Actions 빌드+레지스트리 pull 전환 검토, B) SSH 22 IP 제한 vs Actions 배포 모순 → IAP 터널 검토. C) 헬스체크가 DB 비활성 정지 못 막는 문제는 `GET /health/db`(실쿼리) 추가로 **해결**, 런북 크론을 09:00 KST·/health/db로 수정(D도 해결). 보안: Gemini 키 스크린샷 노출 → 재발급 완료(사용자), `cert/`는 git 미추적·ignore 확인 완료(재발급 불요), 로컬 개인키 사본 삭제 권장. Windows 함정 로그는 사용자 기록 참조.
 - 2026-07-12: **배포 런북/스크립트**(`deploy/`) — GCE VM 생성 gcloud 명령, `setup-vm.sh`(스왑/ufw/fail2ban/Docker/SSH 잠금), 프로덕션 compose(TLS 종단 nginx-prod.conf, Origin CA 볼륨), GH Actions 배포 템플릿(.example — VM 준비 후 workflows로 이동). 실행 대기 조건: GCP 계정·결제, 도메인+Cloudflare, Supabase 키. 이 머신엔 gcloud/Docker 미설치.
 - 2026-07-12: **Gemini 유사도 검사 배선(스텁 제거)** — complete()가 원자적 선점(pending/uploaded/failed→processing) 후 즉시 응답, 검사는 인프로세스 백그라운드(ADR 6.11): Storage 다운로드 + 범위 원문 join → HandwritingCheckService(팀원 구현, PR #2) 대조. 통과=펜 손글씨 && 점수≥60(상수 `PASS_MIN_SIMILARITY_SCORE`, 정책 문서 명문화), 통과 시에만 잔디/streak. 인프라 오류는 failed(재시도 가능), 부팅 시 잔류 processing 정리(단일 인스턴스 전제). `GET /writing-sessions/:id` 폴링 추가, 디버그 엔드포인트 dev 전용 잠금, config가 `.env.local`도 읽게 수정. 단위테스트 26개 통과·빌드 OK. **미검증**: 실제 Gemini/Storage E2E — `.env` 부재로 부팅 불가(위 상태 참고). 언어별 원문(en 번역본)은 TODO.
 - 2026-07-12: **프론트 배포 판정 + 기획 문서 v2.1** — Cloudflare Pages vs nginx 검토 → **프로덕션 nginx 확정**(Pages `_redirects`는 외부 도메인 프록시 불가 → CORS/Functions 글루 필요, 대회 어필 상실; Pages는 프리뷰 채널로 공존). 대회용 아키텍처 기획 문서 개정판 `docs/ARCHITECTURE_v2.1.md` 작성(Redis+BullMQ 워커 제거 → 인프로세스 비동기 ADR 6.11 신설, 6.8 supersede, 구성도 2컨테이너화) — Notion 반영용, 레포 잔류 여부는 사용자 판단.

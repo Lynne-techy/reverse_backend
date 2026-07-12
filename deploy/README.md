@@ -2,6 +2,11 @@
 
 `docs/ARCHITECTURE_v2.1.md` §7 체크리스트의 실행판. 위에서 아래로 순서대로 진행한다.
 
+> **진행 상태 (2026-07-12)**: §4 Cloudflare까지 완료(VM `reverse-vm`, 도메인
+> `reverse-growthlog.com`, Origin CA 설치). §5 기동은 **Supabase 키 대기**.
+> 상세와 발견 이슈(A~D)는 `docs/PROGRESS.md` 참고. 며칠 쉴 땐 VM 중지:
+> `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
+
 ## 0. 선행조건 (사람이 준비할 것)
 
 - [ ] **GCP 계정 + 결제 활성화** — 예산 알림 ₩10,000/₩30,000 구간 설정 (콘솔 → 결제 → 예산 및 알림)
@@ -80,6 +85,11 @@ curl -sk https://localhost/api/health   # 로컬 확인 (SNI 없이 -k)
 # 브라우저: https://<도메인>  /  https://<도메인>/api/health
 ```
 
+> ⚠️ **2GB RAM에서 빌드가 가장 위험한 순간** — 다른 터미널에서 `watch -n2 free -h`로
+> OOM을 감시할 것. 재배포 시엔 실행 중인 컨테이너까지 떠 있어 더 빠듯하다.
+> 빌드 OOM이 반복되면 "GitHub Actions 빌드 → Artifact Registry(서울) push → VM은
+> pull만" 구조로 전환 검토 (진행 기록 이슈 A — 결정 대기).
+
 ## 6. CI/CD (GitHub Actions)
 
 1. VM에 배포용 키 생성: `ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N ''`,
@@ -88,12 +98,20 @@ curl -sk https://localhost/api/health   # 로컬 확인 (SNI 없이 -k)
 3. `deploy/github-deploy.yml.example` → `.github/workflows/deploy.yml`로 이동 후 push.
    (VM이 없는 동안 워크플로가 매번 실패하지 않도록 example로 둔 것)
 
+> ⚠️ **SSH 22 제한과 모순 주의**: 22번을 내 IP 대역으로 잠그면 GitHub Actions
+> 러너(유동 IP)가 접속 불가. 대안: **IAP TCP 포워딩** — 방화벽은
+> `35.235.240.0/20`(IAP 대역)만 허용하고 `gcloud compute ssh --tunnel-through-iap`
+> 사용, ufw에도 같은 대역 반영. 22가 인터넷에 아예 노출되지 않고 신원 기반
+> 접근 제어라 보안 과목 어필도 강함 (진행 기록 이슈 B — 결정 대기).
+
 ## 7. 운영 잔손질
 
-- [ ] Supabase 무료 플랜 7일 비활성 정지 방지 크론 (UNIX 과목 어필 겸 VM cron):
+- [ ] Supabase 무료 플랜 7일 비활성 정지 방지 크론 (UNIX 과목 어필 겸 VM cron).
+  **반드시 `/api/health/db`를 호출할 것** — `/api/health`는 프로세스 생존만 보고
+  DB를 안 건드려서 "DB 활동" 기준인 비활성 판정을 못 막는다:
   ```bash
-  crontab -e   # 매일 09:00 KST 헬스체크
-  0 0 * * * curl -fsS https://<도메인>/api/health > /dev/null 2>&1
+  crontab -e   # 매일 09:00 (VM TZ=Asia/Seoul 기준)
+  0 9 * * * curl -fsS https://reverse-growthlog.com/api/health/db > /dev/null 2>&1
   ```
 - [ ] Ops Agent 설치 → Cloud Monitoring 대시보드
 - [ ] 스냅샷 스케줄 주 1회 (콘솔 → Compute Engine → 스냅샷)
