@@ -38,7 +38,7 @@ gcloud compute addresses describe reverse-ip --region=asia-northeast3 --format='
 ```bash
 gcloud compute ssh reverse-vm --zone=asia-northeast3-a
 # VM 안에서:
-curl -fsSL https://raw.githubusercontent.com/<org>/reverse_backend/main/deploy/setup-vm.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Lynne-techy/reverse_backend/main/deploy/setup-vm.sh | bash
 # (또는 레포 clone 후 bash deploy/setup-vm.sh)
 exit  # docker 그룹 반영을 위해 재접속
 ```
@@ -50,7 +50,7 @@ SSH 비밀번호 로그인 비활성화. 상세는 `setup-vm.sh` 주석 참고.
 
 ```bash
 mkdir -p ~/reverse && cd ~/reverse
-git clone https://github.com/<org>/reverse_backend back/reverse_backend
+git clone https://github.com/Lynne-techy/reverse_backend back/reverse_backend
 git clone https://github.com/Lynne-techy/reverse_app front/reverse_app
 
 # 결합 compose(프로덕션판)를 루트로 복사 — 갱신 시 재복사 필요 (CI 스크립트가 매번 해준다)
