@@ -4,7 +4,8 @@
 > git log / `docs/DATABASE.md` / `docs/ARCHITECTURE.md`에 있으니 여기엔 한두 줄 요약만 남긴다.
 
 ## 상태
-브랜치 `feat/w2-verse-writing-streak` (2026-07-07 기준)
+브랜치 `feat/w3-gemini-wiring` (2026-07-12 기준). **로컬에 `.env` 부재** — 부팅하려면
+Supabase 값 복원 필요(`.env.example` 참고), Gemini 키는 `.env.local`에 있음.
 
 ## 완료 (W1)
 기반구조·의존성, Auth/User 모듈(controller/service/repository 구조), DB 모델링 문서,
@@ -46,6 +47,7 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-12: **Gemini 유사도 검사 배선(스텁 제거)** — complete()가 원자적 선점(pending/uploaded/failed→processing) 후 즉시 응답, 검사는 인프로세스 백그라운드(ADR 6.11): Storage 다운로드 + 범위 원문 join → HandwritingCheckService(팀원 구현, PR #2) 대조. 통과=펜 손글씨 && 점수≥60(상수 `PASS_MIN_SIMILARITY_SCORE`, 정책 문서 명문화), 통과 시에만 잔디/streak. 인프라 오류는 failed(재시도 가능), 부팅 시 잔류 processing 정리(단일 인스턴스 전제). `GET /writing-sessions/:id` 폴링 추가, 디버그 엔드포인트 dev 전용 잠금, config가 `.env.local`도 읽게 수정. 단위테스트 26개 통과·빌드 OK. **미검증**: 실제 Gemini/Storage E2E — `.env` 부재로 부팅 불가(위 상태 참고). 언어별 원문(en 번역본)은 TODO.
 - 2026-07-12: **프론트 배포 판정 + 기획 문서 v2.1** — Cloudflare Pages vs nginx 검토 → **프로덕션 nginx 확정**(Pages `_redirects`는 외부 도메인 프록시 불가 → CORS/Functions 글루 필요, 대회 어필 상실; Pages는 프리뷰 채널로 공존). 대회용 아키텍처 기획 문서 개정판 `docs/ARCHITECTURE_v2.1.md` 작성(Redis+BullMQ 워커 제거 → 인프로세스 비동기 ADR 6.11 신설, 6.8 supersede, 구성도 2컨테이너화) — Notion 반영용, 레포 잔류 여부는 사용자 판단.
 - 2026-07-12: **프론트 결합 compose(상위 레벨)** — `reverse/docker-compose.yml` 신설(web: nginx 정적 서빙+`/api/**` 프록시, api: ports→expose 전환). 프론트 레포(`front/reverse_app`, 별도 git)에 `Dockerfile`/`nginx.conf`/`.dockerignore` 추가 — 팀원 레포라 커밋/PR은 별도. 프론트 `npm run build`(tsc -b)는 미배선 페이지(MainPage/ProfilePage)의 깨진 import·미사용 변수로 **실패** → 도커 빌드는 `vite build`만 사용(임시, 프론트에서 tsc 오류 해소 필요). 상위 compose는 git 밖(비버전) — 위치 확정 시 이동. Docker 미설치로 이미지 빌드 여전히 미검증. 프론트는 아직 API 미호출(더미 데이터)이라 실제 연동 코드는 별도 과제. 참고: 프론트에 wrangler(Cloudflare Pages) 배포 스크립트 존재 — 최종 배포 방식(nginx vs Pages+CORS)은 팀 확정 필요.
 - 2026-07-10: **Docker 컨테이너화(백엔드 단독, Option B)** — 팀 zip에서 API용 `Dockerfile`(node:22-alpine 멀티스테이지)만 채택해 루트에 추가, `.dockerignore`·백엔드 전용 `docker-compose.yml`(api만, 3000 노출) 작성. `main.ts`에 `app.setGlobalPrefix('api')` 추가(배포 시 nginx가 `/api/**`만 프록시하는 전제 — **모든 라우트가 `/api/*`로 이동**, Swagger는 `/api-docs` 유지). zip의 `.env.example`(Prisma/R2 기반)은 현재 코드와 안 맞아 채택 안 함. nginx+프론트 결합 compose는 배포 시점에 상위 레벨에서. 빌드·단위테스트 통과, Docker 미설치라 이미지 빌드는 미검증.
