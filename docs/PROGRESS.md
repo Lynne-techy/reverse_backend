@@ -50,6 +50,13 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **유사도 검사 백그라운드 잡 동시성 캡** — 인프로세스 Gemini 검사(ADR 6.11)가
+  업로드 폭주 시 이미지 버퍼+base64를 무제한 병렬로 메모리에 쌓던 문제를, 외부 의존성 없는
+  `src/common/concurrency-limiter.ts`로 `SIMILARITY_MAX_CONCURRENCY`(기본 3)개까지만 실행하도록 제한
+  (2GB VM 런타임 메모리 보호). 한도 초과분 큐잉, 세션은 이미 processing 선점이라 폴링엔 동일.
+  단위테스트 4개(+기존 전체 30개 통과). VM api 재빌드 배포·health 200. **맥락**: "레지스트리 빌드가
+  런타임 OOM 해법 아니냐"는 질문에서, 레지스트리는 빌드시점 부하만 줄이고 런타임은 별개임을 확인 →
+  런타임 급소인 이 동시성 캡을 먼저 배선. 후속 옵션: 레지스트리 빌드(배포 안전·롤백), e2-medium 리사이즈.
 - 2026-07-13: **운영 잔손질(§7) 완료** — ① Supabase 비활성 방지 크론(매일 09:00 KST
   `/api/health/db` 실쿼리; **VM TZ가 실제 UTC였던 걸 `Asia/Seoul`로 정정** — 문서 기록과 불일치,
   컨테이너는 코드가 UTC 명시라 무영향). ② 주간 스냅샷 정책 `weekly-snap`(일 18:00 UTC=월 03:00 KST,
