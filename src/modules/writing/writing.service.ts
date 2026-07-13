@@ -7,7 +7,10 @@ import {
   NotFoundException,
   OnApplicationBootstrap,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
+import { ConcurrencyLimiter } from '../../common/concurrency-limiter';
+import type { Env } from '../../config/env.validation';
 import { HandwritingCheckService } from '../handwriting-check/handwriting-check.service';
 import { StatsService } from '../stats/stats.service';
 import { VerseService } from '../verse/verse.service';
@@ -30,12 +33,23 @@ const CLAIMABLE_STATUSES: WritingSessionStatus[] = [
 export class WritingService implements OnApplicationBootstrap {
   private readonly logger = new Logger(WritingService.name);
 
+  /**
+   * 백그라운드 유사도 검사의 동시 실행 상한. 각 검사가 이미지 버퍼 + base64 사본을
+   * 메모리에 들고 Gemini를 호출하므로, 업로드 폭주 시 병렬 개수를 제한해 메모리를 보호한다.
+   */
+  private readonly similarityLimiter: ConcurrencyLimiter;
+
   constructor(
     private readonly writingRepository: WritingRepository,
     private readonly statsService: StatsService,
     private readonly verseService: VerseService,
     private readonly handwritingCheckService: HandwritingCheckService,
-  ) {}
+    private readonly config: ConfigService<Env, true>,
+  ) {
+    this.similarityLimiter = new ConcurrencyLimiter(
+      this.config.get('SIMILARITY_MAX_CONCURRENCY', { infer: true }),
+    );
+  }
 
   /**
    * 서버가 유사도 검사 도중 죽으면 processing 세션이 영구히 남는다.
@@ -153,9 +167,18 @@ export class WritingService implements OnApplicationBootstrap {
       throw new ConflictException('이미 처리 중이거나 완료된 세션입니다.');
     }
 
-    // 의도적으로 await하지 않는다. processSimilarity는 내부에서 모든 오류를
-    // 삼키고 세션을 failed로 남기므로 unhandled rejection이 없다.
-    void this.processSimilarity(claimed);
+    // 백그라운드 검사는 동시성 상한(SIMILARITY_MAX_CONCURRENCY) 안에서 실행한다.
+    // 한도를 넘으면 큐에 쌓였다가 슬롯이 날 때 실행돼, 업로드 폭주 시 이미지 버퍼가
+    // 메모리에 무제한으로 누적되는 것을 막는다. 세션은 이미 processing으로 선점돼
+    // 있으므로 클라이언트 폴링에는 (대기 중이든 실행 중이든) 동일하게 보인다.
+    // 의도적으로 await하지 않는다. processSimilarity가 내부에서 모든 오류를 삼켜
+    // run()도 reject되지 않으므로 unhandled rejection이 없다.
+    if (this.similarityLimiter.pending > 0) {
+      this.logger.debug(
+        `유사도 검사 대기열 ${this.similarityLimiter.pending}건 (동시성 상한 도달)`,
+      );
+    }
+    void this.similarityLimiter.run(() => this.processSimilarity(claimed));
 
     return claimed;
   }
