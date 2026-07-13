@@ -6,8 +6,8 @@
 ## 상태
 `main` 최신 (2026-07-13). **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). VM `.env`에 실키 배치 완료(NODE_ENV=production, 600).
-남은 것: §7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드) 결정.
-(§6 CI/CD는 **2026-07-13 실동작 검증 완료** — deploy #2 성공, VM HEAD→822d7e2, 도메인 200.)
+남은 것: 이슈 A(레지스트리 빌드) 결정, 프론트 라우터 배선(팀원). (§6 CI/CD·§7 운영 잔손질
+**2026-07-13 완료** — deploy #2 성공; keepalive 크론/주간 스냅샷/Ops Agent 구성. 모니터링 알림 정책만 선택 미구성.)
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
@@ -50,6 +50,13 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **운영 잔손질(§7) 완료** — ① Supabase 비활성 방지 크론(매일 09:00 KST
+  `/api/health/db` 실쿼리; **VM TZ가 실제 UTC였던 걸 `Asia/Seoul`로 정정** — 문서 기록과 불일치,
+  컨테이너는 코드가 UTC 명시라 무영향). ② 주간 스냅샷 정책 `weekly-snap`(일 18:00 UTC=월 03:00 KST,
+  14일 보관) 부팅 디스크 연결. ③ Ops Agent 설치(게스트 메모리/디스크/로그 → Cloud Monitoring/Logging;
+  ~163MB RSS, available 1.2Gi로 안전). 알림 정책(사이트 다운 이메일)만 선택 미구성.
+  **Windows 함정**: 원격 `--command`에 `>`·`|`·`()` 많으면 plink에서 깨짐 → 스크립트 scp 후 실행.
+  IAP 전환 후 `scp`도 `--tunnel-through-iap` 필요.
 - 2026-07-13: **프론트 `feat/docker-nginx`→`main` 머지 + VM main 전환** — 프론트 레포
   (`Lynne-techy/reverse_app`) main엔 Docker 파일(Dockerfile/nginx.conf/.dockerignore)이 없고
   branch에만 있어 갈라졌던 것 해소. git 머지(충돌 없음, Docker 3파일만 추가·main UI 유지) 후
