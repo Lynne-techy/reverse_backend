@@ -2,9 +2,9 @@
 
 `docs/ARCHITECTURE_v2.1.md` §7 체크리스트의 실행판. 위에서 아래로 순서대로 진행한다.
 
-> **진행 상태 (2026-07-12)**: §4 Cloudflare까지 완료(VM `reverse-vm`, 도메인
-> `reverse-growthlog.com`, Origin CA 설치). §5 기동은 **Supabase 키 대기**.
-> 상세와 발견 이슈(A~D)는 `docs/PROGRESS.md` 참고. 며칠 쉴 땐 VM 중지:
+> **진행 상태 (2026-07-13)**: §5까지 완료 — https://reverse-growthlog.com **전체 스택 라이브**
+> (web/api/health/db 200, 실키 `.env` 배치 완료). 남은 것: §6 CI/CD, §7 운영 잔손질,
+> 이슈 A·B 결정(`docs/PROGRESS.md` 참고). 며칠 쉴 땐 VM 중지:
 > `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 0. 선행조건 (사람이 준비할 것)

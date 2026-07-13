@@ -4,10 +4,9 @@
 > git log / `docs/DATABASE.md` / `docs/ARCHITECTURE.md`에 있으니 여기엔 한두 줄 요약만 남긴다.
 
 ## 상태
-`main` 최신 (2026-07-12, w3 브랜치 머지 완료). **블로커: Supabase 키 미확보** —
-로컬 `.env` 부재 + VM의 `.env`도 더미 값. 키만 채우면 VM 기동(런북 §5) 가능.
-인프라: GCE VM `reverse-vm`(서울, e2-small) + 도메인 `reverse-growthlog.com` +
-Cloudflare(프록시 ON, Full strict, Origin CA ~2041) **구축 완료, §5 기동 직전 상태**.
+`main` 최신 (2026-07-13). **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
+(web/api/health/db 모두 200). VM `.env`에 실키 배치 완료(NODE_ENV=production, 600).
+남은 것: 런북 §6 CI/CD, §7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드)/B(IAP) 결정.
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
@@ -50,6 +49,13 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **런북 §5 완료 — api 포함 전체 스택 라이브** 🎉 `.env.local`(실키 확보 완료)을
+  `NODE_ENV=production`만 바꿔 VM `~/reverse/back/reverse_backend/.env`로 배치(gcloud scp — 이 머신에
+  winget으로 gcloud 설치됨, PATH 미반영 시 `%LOCALAPPDATA%\Google\Cloud SDK\...\bin\gcloud.cmd` 직접 호출;
+  Windows pscp는 `~` 미해석이라 홈 상대경로 사용). 빌드·기동 후 도메인 경유 web/api/health/db 전부 200.
+  Swagger 미노출 확인(/api-docs는 SPA 폴백 — nginx가 /api/**만 프록시), /api/dev/token 404. **VM 켜둔 상태**.
+  로컬·VM 양쪽 레포 pull 완료. **주의**: VM 프론트는 `feat/docker-nginx`(PR 미병합) 기준 빌드라
+  main의 새 UI 커밋(PilsaPage/LoginPage) 미포함 — PR 병합 or main 머지 후 web 재빌드 필요.
 - 2026-07-12: **런북 §5 사실상 완료(web) — https://reverse-growthlog.com 라이브** 🎉 (api만 Supabase 키 대기). ① 이미지 빌드 검증: 2GB VM에서 api+web 빌드 **1분 53초, 스왑 32KiB만 사용** → 이슈 A(OOM 리스크)는 첫 빌드 기준 기우로 실증, 재배포(컨테이너 가동 중) 시나리오만 관찰 필요. ② web 단독 기동 중 발견: nginx 고정 proxy_pass는 api 부재 시 기동 실패 → **변수+resolver로 요청 시점 해석**으로 수정(양 레포 nginx conf). ③ 도메인 522 → 원인: **80/443 방화벽 규칙 부재**(태그 매칭 규칙은 콘솔 생성 시만 자동) → 규칙 생성 후 200 OK, 전체 체인(Cloudflare 프록시→GCP 방화벽→nginx TLS→SPA) 관통 확인. `/api/*`는 예상대로 502. 런북 §1에 방화벽 명령 추가. 프론트 nginx 수정은 `feat/docker-nginx`에 push(PR 반영). **VM 켜둔 상태** — 쉴 때 stop 잊지 말 것.
 - 2026-07-12: **인프라 구축(런북 §1~§4 완료, 사용자 직접)** — GCP `reverse-502210`, VM `reverse-vm` 생성(최초 콘솔 생성분은 명명 불일치로 삭제 후 gcloud 재생성), TZ Seoul·스왑·Docker 확인, 코드 배치(`~/reverse/`), 도메인 `reverse-growthlog.com` + Origin CA(만료 2041-07-08) 설치, `docker compose config` 정합성 검증 통과. §5 기동은 Supabase 키 대기. **미완**: ufw/fail2ban/SSH 잠금(setup-vm.sh 일부), A레코드 프록시 ON·Full(strict) 재확인 필요. **발견 이슈(결정 대기)**: A) 2GB VM 자체 빌드 OOM 리스크 → Actions 빌드+레지스트리 pull 전환 검토, B) SSH 22 IP 제한 vs Actions 배포 모순 → IAP 터널 검토. C) 헬스체크가 DB 비활성 정지 못 막는 문제는 `GET /health/db`(실쿼리) 추가로 **해결**, 런북 크론을 09:00 KST·/health/db로 수정(D도 해결). 보안: Gemini 키 스크린샷 노출 → 재발급 완료(사용자), `cert/`는 git 미추적·ignore 확인 완료(재발급 불요), 로컬 개인키 사본 삭제 권장. Windows 함정 로그는 사용자 기록 참조.
 - 2026-07-12: **배포 런북/스크립트**(`deploy/`) — GCE VM 생성 gcloud 명령, `setup-vm.sh`(스왑/ufw/fail2ban/Docker/SSH 잠금), 프로덕션 compose(TLS 종단 nginx-prod.conf, Origin CA 볼륨), GH Actions 배포 템플릿(.example — VM 준비 후 workflows로 이동). 실행 대기 조건: GCP 계정·결제, 도메인+Cloudflare, Supabase 키. 이 머신엔 gcloud/Docker 미설치.
