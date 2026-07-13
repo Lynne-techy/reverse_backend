@@ -50,6 +50,10 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **로컬 dev 매뉴얼 `docs/LOCAL_DEV.md`** — dev VM 대신 내 PC 도커로 무료 dev.
+  방식 A(도커 결합 스택 localhost:8080, prod 유사) / 방식 B(백엔드만 `npm run start:dev`, 빠른 반복).
+  전제·`.env` 준비(`cp .env.local .env`)·종료·트러블슈팅 정리. **주의**: Supabase 프로젝트 1개라
+  로컬 dev도 운영 DB 공유(분리 시 dev용 Supabase 별도 생성). 팀원 IAM 4명은 배포/VM용, dev는 무료 로컬 권장.
 - 2026-07-13: **CI/CD 하루 1회 배포 배선(WIF + IAP, §6)** — `.github/workflows/deploy.yml`:
   매일 19:00 UTC(04:00 KST)+수동, IAP 터널로 `git pull`→**변경 시에만 재빌드**(OOM 노출↓).
   GCP: 배포 SA `deploy@`(iap.tunnelResourceAccessor+compute.instanceAdmin.v1), Workload Identity
