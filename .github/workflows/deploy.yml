@@ -1,11 +1,9 @@
 name: deploy
 
-# 하루 한 번(19:00 UTC = 04:00 KST) VM에 최신 코드를 배포한다.
-# SSH는 IAP 전용이라 러너가 GCP에 Workload Identity(키리스)로 인증한 뒤
-# IAP 터널로 접속한다(2026-07-13 전환, deploy/README.md §6 참고).
-# Actions 탭 > Run workflow 로 수동 실행도 가능.
-#
-# 필요한 GitHub Secrets (Settings > Secrets and variables > Actions):
+# 하루 한 번(19:00 UTC = 04:00 KST) + 수동 실행으로 배포한다.
+# 레지스트리 빌드(이슈 A): Actions에서 api/web 이미지를 빌드해 Artifact Registry(서울)로
+# push하고, VM은 IAP 터널로 접속해 pull만 한다(2GB VM 빌드 부하 0 + 태그 롤백).
+# 인증은 Workload Identity(키리스). 필요한 Secrets:
 #   WIF_PROVIDER = projects/691089332676/locations/global/workloadIdentityPools/github-pool/providers/github
 #   DEPLOY_SA    = deploy@reverse-502210.iam.gserviceaccount.com
 on:
@@ -21,8 +19,52 @@ concurrency:
   group: deploy-vm
   cancel-in-progress: false
 
+env:
+  AR_HOST: asia-northeast3-docker.pkg.dev
+  AR_REPO: asia-northeast3-docker.pkg.dev/reverse-502210/reverse
+
 jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 백엔드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          path: back/reverse_backend
+      - name: 프론트 체크아웃 (web 이미지용)
+        uses: actions/checkout@v4
+        with:
+          repository: Lynne-techy/reverse_app
+          ref: main
+          path: front/reverse_app
+      - name: GCP 인증 (Workload Identity — 키리스)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DEPLOY_SA }}
+      - name: gcloud 설치
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Docker를 Artifact Registry에 인증
+        run: gcloud auth configure-docker ${{ env.AR_HOST }} --quiet
+      - name: api 이미지 빌드·push (sha + latest)
+        run: |
+          docker build \
+            -t ${{ env.AR_REPO }}/api:${{ github.sha }} \
+            -t ${{ env.AR_REPO }}/api:latest \
+            back/reverse_backend
+          docker push ${{ env.AR_REPO }}/api:${{ github.sha }}
+          docker push ${{ env.AR_REPO }}/api:latest
+      - name: web 이미지 빌드·push (sha + latest)
+        run: |
+          docker build \
+            -t ${{ env.AR_REPO }}/web:${{ github.sha }} \
+            -t ${{ env.AR_REPO }}/web:latest \
+            front/reverse_app
+          docker push ${{ env.AR_REPO }}/web:${{ github.sha }}
+          docker push ${{ env.AR_REPO }}/web:latest
+
   deploy:
+    needs: build-push
     runs-on: ubuntu-latest
     steps:
       - name: GCP 인증 (Workload Identity — 키리스)
@@ -30,11 +72,9 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.DEPLOY_SA }}
-
       - name: gcloud 설치
         uses: google-github-actions/setup-gcloud@v2
-
-      - name: IAP 터널로 배포 (git pull → 변경 시에만 재빌드)
+      - name: IAP 터널로 배포 (설정 pull + 이미지 pull + up)
         run: |
           gcloud compute ssh etri405a@reverse-vm \
             --zone=asia-northeast3-a \
@@ -43,20 +83,16 @@ jobs:
             --command='
               set -e
               cd ~/reverse
-              b0=$(git -C back/reverse_backend rev-parse HEAD)
-              f0=$(git -C front/reverse_app rev-parse HEAD)
+              # 설정(compose/nginx conf)만 git으로 갱신 — 빌드는 하지 않는다
               git -C back/reverse_backend pull --ff-only
-              git -C front/reverse_app pull --ff-only
               cp back/reverse_backend/deploy/docker-compose.prod.yml docker-compose.yml
-              b1=$(git -C back/reverse_backend rev-parse HEAD)
-              f1=$(git -C front/reverse_app rev-parse HEAD)
-              if [ "$b0" != "$b1" ] || [ "$f0" != "$f1" ]; then
-                echo "변경 감지 → 재빌드 (2GB VM: free -h 로 OOM 주의)"
-                docker compose up -d --build
-                docker image prune -f
-              else
-                echo "변경 없음 → 재빌드 생략, 실행 상태만 보장"
-                docker compose up -d
-              fi
+              # VM 기본 SA 메타데이터 토큰으로 Artifact Registry 로그인 후 이미지 pull
+              TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
+                http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token \
+                | grep -o "\"access_token\":\"[^\"]*" | cut -d\" -f4)
+              echo "$TOKEN" | docker login -u oauth2accesstoken --password-stdin https://asia-northeast3-docker.pkg.dev
+              docker compose pull
+              docker compose up -d
+              docker image prune -f
               docker compose ps
             '

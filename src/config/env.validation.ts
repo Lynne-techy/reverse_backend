@@ -23,6 +23,10 @@ export const envSchema = z.object({
   // Gemini (손글씨 검사 / 유사도)
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+  // 인프로세스 백그라운드 유사도 검사(ADR 6.11)의 동시 실행 상한.
+  // 각 검사는 이미지 버퍼 + base64 사본을 메모리에 들고 Gemini를 호출하므로,
+  // 업로드 폭주 시 무제한 병렬을 막아 2GB VM의 메모리를 보호한다. VM을 키우면 상향.
+  SIMILARITY_MAX_CONCURRENCY: z.coerce.number().int().positive().default(3),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../config/env.validation';
 import { HandwritingCheckService } from '../handwriting-check/handwriting-check.service';
 import { HandwritingCheckResult } from '../handwriting-check/handwriting-check.types';
 import { StatsService } from '../stats/stats.service';
@@ -87,11 +89,16 @@ describe('WritingService', () => {
     verseService = { findById: jest.fn(), getRange: jest.fn() };
     handwritingCheckService = { checkAndLog: jest.fn() };
 
+    const config = {
+      get: jest.fn().mockReturnValue(3), // SIMILARITY_MAX_CONCURRENCY
+    } as unknown as ConfigService<Env, true>;
+
     service = new WritingService(
       repository as unknown as WritingRepository,
       statsService as unknown as StatsService,
       verseService as unknown as VerseService,
       handwritingCheckService as unknown as HandwritingCheckService,
+      config,
     );
 
     // 정상 경로 기본값. 개별 테스트에서 필요한 부분만 덮어쓴다.
