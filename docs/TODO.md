@@ -48,7 +48,7 @@
 - [ ] `[MVP]` e2e 테스트
 
 ## 데이터 / 스키마
-- [ ] `[슬라이스]` 미니 시드(5~10절) 적재·검증 (`scripts/seed-verses.mjs` + `data/verses.sample.json`)
+- [x] `[슬라이스]` verses 시딩·검증 (`scripts/seed-verses.mjs`, 개역개정 66권 31,088절 적재 완료)
 
 ---
 
