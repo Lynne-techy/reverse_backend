@@ -109,12 +109,35 @@ export class WritingRepository {
     return data ? toWritingSession(data) : null;
   }
 
+  /**
+   * 유사도 검사를 위해 세션을 원자적으로 선점한다.
+   * `status in (fromStatuses)` 조건이 걸린 update라 동시 요청 중 한쪽만 성공하고,
+   * 나머지는 null을 받는다 (check-then-act 경쟁 방지). key verse도 이 시점에 확정.
+   */
+  async claimForProcessing(
+    id: string,
+    keyVerseId: number,
+    fromStatuses: WritingSessionStatus[],
+  ): Promise<WritingSession | null> {
+    const { data, error } = await this.supabase
+      .from('writing_sessions')
+      .update({ status: 'processing', key_verse_id: keyVerseId })
+      .eq('id', id)
+      .in('status', fromStatuses)
+      .select('*')
+      .maybeSingle<WritingSessionRow>();
+
+    if (error) {
+      throw new Error(`필사 세션 선점 실패: ${error.message}`);
+    }
+    return data ? toWritingSession(data) : null;
+  }
+
   async markCompleted(
     id: string,
     result: {
-      keyVerseId: number;
-      recognizedText: string;
-      similarityScore: number;
+      recognizedText: string | null;
+      similarityScore: number | null;
       passed: boolean;
     },
   ): Promise<WritingSession> {
@@ -122,7 +145,6 @@ export class WritingRepository {
       .from('writing_sessions')
       .update({
         status: 'completed',
-        key_verse_id: result.keyVerseId,
         recognized_text: result.recognizedText,
         similarity_score: result.similarityScore,
         passed: result.passed,
@@ -138,6 +160,54 @@ export class WritingRepository {
       );
     }
     return toWritingSession(data);
+  }
+
+  /** 검사 도중 오류가 난 세션을 failed로 표시한다. failed는 complete 재시도가 가능하다. */
+  async markFailed(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('writing_sessions')
+      .update({ status: 'failed' })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`필사 세션 실패 처리 실패: ${error.message}`);
+    }
+  }
+
+  /**
+   * processing 상태로 남은 세션을 일괄 failed 처리한다. 서버가 검사 도중 죽으면
+   * processing이 영구히 남으므로 부팅 시 정리한다. 단일 인스턴스 전제 —
+   * 다중 인스턴스가 되면 다른 인스턴스의 진행 중 검사를 죽이므로 이 방식을 버리고
+   * 타임스탬프 기반 스윕으로 바꿔야 한다.
+   */
+  async failStaleProcessing(): Promise<void> {
+    const { error } = await this.supabase
+      .from('writing_sessions')
+      .update({ status: 'failed' })
+      .eq('status', 'processing');
+
+    if (error) {
+      throw new Error(`잔류 processing 세션 정리 실패: ${error.message}`);
+    }
+  }
+
+  /** Storage에서 필사 이미지를 내려받는다 (백그라운드 유사도 검사용). */
+  async downloadImage(
+    objectKey: string,
+  ): Promise<{ buffer: Buffer; mimetype: string }> {
+    const { data, error } = await this.supabase.storage
+      .from(this.bucket)
+      .download(objectKey);
+
+    if (error || !data) {
+      throw new Error(
+        `필사 이미지 다운로드 실패: ${error?.message ?? '데이터 없음'}`,
+      );
+    }
+    return {
+      buffer: Buffer.from(await data.arrayBuffer()),
+      mimetype: data.type || 'image/jpeg',
+    };
   }
 
   /** 주어진 object_key 경로에 대한 업로드용 presigned URL을 발급한다. */

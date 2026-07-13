@@ -7,6 +7,13 @@ export const WRITING_SESSION_STATUSES = [
 ] as const;
 export type WritingSessionStatus = (typeof WRITING_SESSION_STATUSES)[number];
 
+/**
+ * 유사도 통과 최소 점수. 점수 가이드(docs/HANDWRITING_CHECK_POLICY.md)상
+ * 60~84는 "알아볼 수 있는 같은 구절"이므로 습관 형성 앱 특성상 관대하게 60을
+ * 기준으로 잡는다. 오탈자 몇 개로 잔디를 안 주면 UX가 가혹해진다.
+ */
+export const PASS_MIN_SIMILARITY_SCORE = 60;
+
 /** 필사 언어. 프로토타입의 한/영 '병행' 모드는 제외하고 ko·en 택1로 단순화. */
 export const WRITING_LANGUAGES = ['ko', 'en'] as const;
 export type WritingLanguage = (typeof WRITING_LANGUAGES)[number];

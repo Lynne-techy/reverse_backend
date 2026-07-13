@@ -18,6 +18,9 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
 
+  // nginx가 /api/** 만 프록시하는 배포 구성 전제 (동일 도메인 → CORS 제거)
+  app.setGlobalPrefix('api');
+
   const config = app.get(ConfigService<Env, true>);
 
   // 프로덕션에서는 API 스펙을 외부에 노출하지 않는다.

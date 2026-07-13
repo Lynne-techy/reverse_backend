@@ -5,5 +5,6 @@ import { HandwritingCheckService } from './handwriting-check.service';
 @Module({
   controllers: [HandwritingCheckController],
   providers: [HandwritingCheckService],
+  exports: [HandwritingCheckService],
 })
 export class HandwritingCheckModule {}

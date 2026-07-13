@@ -13,6 +13,9 @@ import { validateEnv } from './env.validation';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
+      // .env.local(개인 로컬 값, git 미추적)이 .env(공통 값)보다 우선한다.
+      // 기본값은 .env만 읽어서, .env.local에 넣은 키가 조용히 무시되는 문제가 있었다.
+      envFilePath: ['.env.local', '.env'],
       validate: validateEnv,
     }),
   ],

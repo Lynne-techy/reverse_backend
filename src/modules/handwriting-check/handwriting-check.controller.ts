@@ -2,12 +2,15 @@ import {
   BadRequestException,
   Body,
   Controller,
+  NotFoundException,
   Post,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/public.decorator';
+import type { Env } from '../../config/env.validation';
 import { HandwritingCheckService } from './handwriting-check.service';
 import type {
   HandwritingCheckResult,
@@ -26,6 +29,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
 export class HandwritingCheckController {
   constructor(
     private readonly handwritingCheckService: HandwritingCheckService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   @Public()
@@ -39,6 +43,11 @@ export class HandwritingCheckController {
     @UploadedFile() image?: UploadedImageFile,
     @Body('originalText') originalText?: string,
   ): Promise<HandwritingCheckResult> {
+    // 인증 없는(@Public) 디버그 경로가 프로덕션에서 Gemini 비용 남용 벡터가
+    // 되지 않도록, dev 모듈과 같은 방식으로 개발 환경 밖에선 숨긴다.
+    if (this.config.get('NODE_ENV', { infer: true }) !== 'development') {
+      throw new NotFoundException();
+    }
     if (!image) {
       throw new BadRequestException('image 파일이 필요합니다.');
     }

@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+cert
+certs
+*.pem
+*.key
+*.log
+files.zip
+docs
+test
+data
+supabase
+public

@@ -1,0 +1,36 @@
+# Re-Verse 프로덕션 결합 Compose — GCE VM용 (ARCHITECTURE_v2.1 §3)
+# 사용법: ~/reverse/ 에 back/reverse_backend, front/reverse_app 을 clone 한 뒤
+#   cp back/reverse_backend/deploy/docker-compose.prod.yml docker-compose.yml
+#   docker compose up -d --build
+# 로컬 개발용(HTTP, 8080)은 상위 레벨의 개발 compose 를 사용.
+
+services:
+  api:
+    build:
+      context: ./back/reverse_backend
+    env_file:
+      - ./back/reverse_backend/.env # NODE_ENV=production 포함할 것 (Swagger 비노출)
+    expose:
+      - "3000" # 내부 네트워크 전용 — web(nginx)만 접근
+    restart: unless-stopped
+    mem_limit: 1g # e2-small 2GB에서 폭주 방지 (§7 체크리스트)
+
+  web:
+    build:
+      context: ./front/reverse_app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # TLS 종단: Cloudflare Origin CA 인증서 (런북 §4에서 발급)
+      - ./certs:/etc/nginx/certs:ro
+      # 이미지에 구운 HTTP 전용 conf 를 TLS 버전으로 덮어쓴다
+      - ./back/reverse_backend/deploy/nginx-prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+    mem_limit: 256m
+
+networks:
+  default:
+    name: re-verse
