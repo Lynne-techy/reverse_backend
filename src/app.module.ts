@@ -9,6 +9,7 @@ import { StatsModule } from './modules/stats/stats.module';
 import { DevModule } from './modules/dev/dev.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { HandwritingCheckModule } from './modules/handwriting-check/handwriting-check.module';
+import { BooksModule } from './modules/books/books.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { HandwritingCheckModule } from './modules/handwriting-check/handwriting-
     StatsModule,
     DevModule,
     HandwritingCheckModule,
+    BooksModule,
   ],
   controllers: [HealthController],
 })
