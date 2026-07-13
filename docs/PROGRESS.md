@@ -50,6 +50,14 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **프론트 `feat/docker-nginx`→`main` 머지 + VM main 전환** — 프론트 레포
+  (`Lynne-techy/reverse_app`) main엔 Docker 파일(Dockerfile/nginx.conf/.dockerignore)이 없고
+  branch에만 있어 갈라졌던 것 해소. git 머지(충돌 없음, Docker 3파일만 추가·main UI 유지) 후
+  origin/main push(`99b751a`). VM 프론트를 `git checkout main`으로 전환·pull·web 재빌드,
+  api/web·도메인 200. **단, 화면 변화 없음**: `src/pages/*`(Login/pilsa/heatmap/recommend 등)는
+  파일만 있고 `App.tsx`/라우터에 **import·라우팅이 안 돼** vite가 tree-shake → 빌드 산출물
+  동일(`index-CC3qmRrA.js`). 현재 배포 앱은 `components/*` 기반 단일 대시보드(예시 UI). 새 페이지
+  노출은 프론트에서 라우터 배선 필요(팀원 작업). CI 관점: 이제 매일 배포가 main(도커+UI)을 pull.
 - 2026-07-13: **로컬 dev 매뉴얼 `docs/LOCAL_DEV.md`** — dev VM 대신 내 PC 도커로 무료 dev.
   방식 A(도커 결합 스택 localhost:8080, prod 유사) / 방식 B(백엔드만 `npm run start:dev`, 빠른 반복).
   전제·`.env` 준비(`cp .env.local .env`)·종료·트러블슈팅 정리. **주의**: Supabase 프로젝트 1개라
