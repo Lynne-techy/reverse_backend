@@ -6,8 +6,8 @@
 ## 상태
 `main` 최신 (2026-07-13). **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). VM `.env`에 실키 배치 완료(NODE_ENV=production, 600).
-남은 것: §6 CI/CD **GitHub Secrets 2개 추가만 남음**(WIF_PROVIDER/DEPLOY_SA — 아래 최근 세션),
-§7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드) 결정.
+남은 것: §7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드) 결정.
+(§6 CI/CD는 **2026-07-13 실동작 검증 완료** — deploy #2 성공, VM HEAD→822d7e2, 도메인 200.)
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
@@ -63,6 +63,10 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
   `projects/691089332676/locations/global/workloadIdentityPools/github-pool/providers/github`,
   DEPLOY_SA=`deploy@reverse-502210.iam.gserviceaccount.com`) 추가하면 Run workflow로 즉시 동작.
   주의: 스케줄 배포는 VM이 켜져 있어야 성공. gh CLI 미설치라 secret은 사용자가 UI에서 직접 추가.
+  **실동작 검증(deploy #2 성공)**: 첫 실행(#1)은 러너 `gcloud compute ssh`가 SSH 키를 인스턴스
+  메타데이터에 못 써서 실패 → 배포 SA에 **VM 기본 컴퓨트 SA 대상 `iam.serviceAccountUser`** 추가로 해결
+  (메타데이터 SSH 키 주입에 actAs 필요). 재실행 시 HEAD→822d7e2·컨테이너 재기동·도메인 200 확인.
+  Node20 deprecation 경고는 무해(GitHub가 Node24로 강제). secret은 `reverse_app`이 아닌 **백엔드 레포**에.
 - 2026-07-13: **팀원 IAM + SSH IAP 전환(이슈 B 해결)** — 팀원 3명(jing07161@gmail.com,
   lynne@ahnbiz.com, daewoongdhwang@gmail.com)에게 `roles/editor`+`roles/iap.tunnelResourceAccessor` 부여.
   방화벽: `allow-ssh-iap`(22, 35.235.240.0/20만) 신설 후 `default-allow-ssh`/`default-allow-rdp`(전세계 개방) **삭제**.
