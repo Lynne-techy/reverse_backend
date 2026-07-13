@@ -6,7 +6,7 @@
 ## 상태
 `main` 최신 (2026-07-13). **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). VM `.env`에 실키 배치 완료(NODE_ENV=production, 600).
-남은 것: 런북 §6 CI/CD, §7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드)/B(IAP) 결정.
+남은 것: 런북 §6 CI/CD, §7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드) 결정.
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
@@ -49,6 +49,11 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **팀원 IAM + SSH IAP 전환(이슈 B 해결)** — 팀원 3명(jing07161@gmail.com,
+  lynne@ahnbiz.com, daewoongdhwang@gmail.com)에게 `roles/editor`+`roles/iap.tunnelResourceAccessor` 부여.
+  방화벽: `allow-ssh-iap`(22, 35.235.240.0/20만) 신설 후 `default-allow-ssh`/`default-allow-rdp`(전세계 개방) **삭제**.
+  IAP 터널 접속·web/api 200 검증 완료. 접속법: `gcloud compute ssh reverse-vm --zone=asia-northeast3-a --tunnel-through-iap`
+  (외부 IP가 있어서 플래그 필수). **후속**: §6 GH Actions 배포는 기존 SSH 방식 불가 → 서비스 계정 + IAP 터널로 작성 필요.
 - 2026-07-13: **런북 §5 완료 — api 포함 전체 스택 라이브** 🎉 `.env.local`(실키 확보 완료)을
   `NODE_ENV=production`만 바꿔 VM `~/reverse/back/reverse_backend/.env`로 배치(gcloud scp — 이 머신에
   winget으로 gcloud 설치됨, PATH 미반영 시 `%LOCALAPPDATA%\Google\Cloud SDK\...\bin\gcloud.cmd` 직접 호출;

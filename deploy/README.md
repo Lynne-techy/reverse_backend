@@ -43,7 +43,14 @@ gcloud compute firewall-rules create default-allow-https \
   --network=default --direction=INGRESS --action=ALLOW \
   --rules=tcp:443 --source-ranges=0.0.0.0/0 --target-tags=https-server
 
-# (권장) SSH 22 포트를 내 IP로 제한하려면 default-allow-ssh 대신 커스텀 규칙 사용
+# ✅ SSH는 IAP 전용으로 전환 완료 (2026-07-13, 이슈 B 해결) — default-allow-ssh/rdp 삭제됨
+#    22번은 IAP 대역(35.235.240.0/20)만 허용. 접속하려면 IAM에
+#    roles/iap.tunnelResourceAccessor 필요 + --tunnel-through-iap 플래그 필수:
+gcloud compute firewall-rules create allow-ssh-iap \
+  --network=default --direction=INGRESS --action=ALLOW \
+  --rules=tcp:22 --source-ranges=35.235.240.0/20
+gcloud compute ssh reverse-vm --zone=asia-northeast3-a --tunnel-through-iap
+
 gcloud compute addresses describe reverse-ip --region=asia-northeast3 --format='get(address)'
 ```
 
@@ -107,11 +114,11 @@ curl -sk https://localhost/api/health   # 로컬 확인 (SNI 없이 -k)
 3. `deploy/github-deploy.yml.example` → `.github/workflows/deploy.yml`로 이동 후 push.
    (VM이 없는 동안 워크플로가 매번 실패하지 않도록 example로 둔 것)
 
-> ⚠️ **SSH 22 제한과 모순 주의**: 22번을 내 IP 대역으로 잠그면 GitHub Actions
-> 러너(유동 IP)가 접속 불가. 대안: **IAP TCP 포워딩** — 방화벽은
-> `35.235.240.0/20`(IAP 대역)만 허용하고 `gcloud compute ssh --tunnel-through-iap`
-> 사용, ufw에도 같은 대역 반영. 22가 인터넷에 아예 노출되지 않고 신원 기반
-> 접근 제어라 보안 과목 어필도 강함 (진행 기록 이슈 B — 결정 대기).
+> ⚠️ **IAP 전환 완료(2026-07-13)에 따른 주의**: 22번이 IAP 대역만 허용이라 위
+> 1~3의 "SSH로 직접 접속" 방식 배포는 **동작 안 함**. 워크플로를 서비스 계정
+> (`roles/iap.tunnelResourceAccessor` + compute 접근) + `gcloud compute ssh
+> --tunnel-through-iap` 기반으로 작성할 것. 신원 기반 접근 제어라 보안 과목
+> 어필도 강함 (이슈 B — 해결됨).
 
 ## 7. 운영 잔손질
 
