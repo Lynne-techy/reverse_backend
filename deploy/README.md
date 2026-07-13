@@ -92,31 +92,43 @@ nano back/reverse_backend/.env
   ```
 - [ ] R2는 이미지 저장 R2 전환 시점에 (지금은 Supabase Storage)
 
-## 5. 기동
+## 5. 기동 (레지스트리 빌드 — 이슈 A 해결)
+
+이미지는 **VM에서 빌드하지 않는다.** GitHub Actions가 빌드해 Artifact Registry(서울)로
+push하고 VM은 pull만 한다(§6). 평소 배포는 워크플로가 하고, 수동 기동은 아래처럼:
 
 ```bash
-cd ~/reverse && docker compose up -d --build
+cd ~/reverse
+cp back/reverse_backend/deploy/docker-compose.prod.yml docker-compose.yml
+# Artifact Registry 로그인 (VM 기본 SA 메타데이터 토큰)
+TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
+  http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token \
+  | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+echo "$TOKEN" | docker login -u oauth2accesstoken --password-stdin https://asia-northeast3-docker.pkg.dev
+docker compose pull && docker compose up -d
 docker compose ps                       # web/api 둘 다 Up 확인
 curl -sk https://localhost/api/health   # 로컬 확인 (SNI 없이 -k)
-# 브라우저: https://<도메인>  /  https://<도메인>/api/health
 ```
 
-> ⚠️ **2GB RAM에서 빌드가 가장 위험한 순간** — 다른 터미널에서 `watch -n2 free -h`로
-> OOM을 감시할 것. 재배포 시엔 실행 중인 컨테이너까지 떠 있어 더 빠듯하다.
-> 빌드 OOM이 반복되면 "GitHub Actions 빌드 → Artifact Registry(서울) push → VM은
-> pull만" 구조로 전환 검토 (진행 기록 이슈 A — 결정 대기).
+> ✅ VM 빌드 부하 0(이슈 A 해소). 이미지에 `:latest` + `:<git-sha>` 태그가 붙어 롤백 가능:
+> 특정 sha로 되돌리려면 그 태그를 pull해 compose의 `:latest` 자리에 쓰거나 재태그한다.
 
-## 6. CI/CD (GitHub Actions — WIF + IAP, 하루 1회)
+## 6. CI/CD (GitHub Actions — 레지스트리 빌드 + WIF + IAP, 하루 1회)
 
-워크플로 `.github/workflows/deploy.yml`가 **매일 19:00 UTC(04:00 KST)** + 수동 실행으로
-VM에 `git pull` 후 **변경이 있을 때만** 재빌드한다(2GB VM OOM 노출 최소화). SSH가 IAP
-전용이라 러너는 **Workload Identity(키리스)** 로 GCP에 인증한 뒤 `gcloud compute ssh
---tunnel-through-iap`로 접속한다. 장기 비밀키가 GitHub에 저장되지 않아 보안 과목 어필도 강함.
+워크플로 `.github/workflows/deploy.yml`가 **매일 19:00 UTC(04:00 KST)** + 수동 실행으로 두 잡:
+- **build-push**: 두 레포(백엔드 자기 자신 + 프론트 `reverse_app`) 체크아웃 → `api`/`web` 이미지
+  빌드 → Artifact Registry(`asia-northeast3-docker.pkg.dev/reverse-502210/reverse`)로
+  `:<git-sha>`+`:latest` push. (러너에서 빌드하므로 2GB VM은 빌드 부하 0)
+- **deploy**: IAP 터널로 VM 접속 → 설정(compose/nginx)만 `git pull` → AR 로그인 → `docker
+  compose pull` → `up -d`.
 
-GCP 측 셋업(서비스계정 `deploy@`, 역할 `iap.tunnelResourceAccessor`+`compute.instanceAdmin.v1`,
-**VM 기본 SA `<projectnum>-compute@…`에 대한 `iam.serviceAccountUser`**,
-Workload Identity Pool `github-pool`/Provider `github`, 레포 principalSet 바인딩)은
-**2026-07-13 gcloud로 구성 완료**. 재현이 필요하면 git log 및 `docs/PROGRESS.md` 참고.
+인증은 **Workload Identity(키리스)** — 장기 비밀키를 GitHub에 저장하지 않는다.
+
+GCP 측 셋업(서비스계정 `deploy@`; 역할 `iap.tunnelResourceAccessor`+`compute.instanceAdmin.v1`+
+**컴퓨트 기본 SA에 대한 `iam.serviceAccountUser`**+**AR `artifactregistry.writer`**;
+VM 기본 SA에 **AR `artifactregistry.reader`**; Workload Identity Pool `github-pool`/Provider
+`github`; 레포 principalSet 바인딩; AR 저장소 `reverse`(서울, docker))은 **2026-07-13 gcloud로
+구성 완료**. 재현이 필요하면 git log 및 `docs/PROGRESS.md` 참고.
 
 > 💡 함정: `serviceAccountUser`가 없으면 러너의 `gcloud compute ssh`가 SSH 키를 인스턴스
 > 메타데이터에 못 써서 실패한다(`The user does not have access to service account …`).

@@ -50,6 +50,13 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **레지스트리 빌드 전환(이슈 A 해결) — 배선 완료, 첫 실행 대기** — VM 직접 빌드 →
+  Actions 빌드+Artifact Registry(서울, 저장소 `reverse`) push → VM은 pull만. 워크플로 2잡화
+  (build-push: 두 레포 체크아웃→api/web 빌드→`:sha`+`:latest` push / deploy: IAP→설정 git pull→
+  AR 로그인→compose pull→up). prod compose를 `build:`→`image:`로 전환. IAM 추가: 배포 SA
+  `artifactregistry.writer`, VM 컴퓨트 SA `artifactregistry.reader`. VM 메타데이터 토큰 AR 로그인
+  경로는 사전 검증(Login Succeeded). 두 레포 public이라 Actions에서 web도 빌드 가능. **다음**: 사용자가
+  Run workflow → 내가 VM이 AR 이미지로 도는지 검증. 롤백은 `:sha` 태그로. e2-medium 리사이즈는 부하 시.
 - 2026-07-13: **유사도 검사 백그라운드 잡 동시성 캡** — 인프로세스 Gemini 검사(ADR 6.11)가
   업로드 폭주 시 이미지 버퍼+base64를 무제한 병렬로 메모리에 쌓던 문제를, 외부 의존성 없는
   `src/common/concurrency-limiter.ts`로 `SIMILARITY_MAX_CONCURRENCY`(기본 3)개까지만 실행하도록 제한
