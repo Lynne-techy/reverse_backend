@@ -106,19 +106,29 @@ curl -sk https://localhost/api/health   # 로컬 확인 (SNI 없이 -k)
 > 빌드 OOM이 반복되면 "GitHub Actions 빌드 → Artifact Registry(서울) push → VM은
 > pull만" 구조로 전환 검토 (진행 기록 이슈 A — 결정 대기).
 
-## 6. CI/CD (GitHub Actions)
+## 6. CI/CD (GitHub Actions — WIF + IAP, 하루 1회)
 
-1. VM에 배포용 키 생성: `ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N ''`,
-   공개키를 `~/.ssh/authorized_keys`에 추가.
-2. 백엔드 레포 Secrets: `DEPLOY_HOST`(고정 IP), `DEPLOY_USER`, `DEPLOY_SSH_KEY`(개인키).
-3. `deploy/github-deploy.yml.example` → `.github/workflows/deploy.yml`로 이동 후 push.
-   (VM이 없는 동안 워크플로가 매번 실패하지 않도록 example로 둔 것)
+워크플로 `.github/workflows/deploy.yml`가 **매일 19:00 UTC(04:00 KST)** + 수동 실행으로
+VM에 `git pull` 후 **변경이 있을 때만** 재빌드한다(2GB VM OOM 노출 최소화). SSH가 IAP
+전용이라 러너는 **Workload Identity(키리스)** 로 GCP에 인증한 뒤 `gcloud compute ssh
+--tunnel-through-iap`로 접속한다. 장기 비밀키가 GitHub에 저장되지 않아 보안 과목 어필도 강함.
 
-> ⚠️ **IAP 전환 완료(2026-07-13)에 따른 주의**: 22번이 IAP 대역만 허용이라 위
-> 1~3의 "SSH로 직접 접속" 방식 배포는 **동작 안 함**. 워크플로를 서비스 계정
-> (`roles/iap.tunnelResourceAccessor` + compute 접근) + `gcloud compute ssh
-> --tunnel-through-iap` 기반으로 작성할 것. 신원 기반 접근 제어라 보안 과목
-> 어필도 강함 (이슈 B — 해결됨).
+GCP 측 셋업(서비스계정 `deploy@`, 역할 `iap.tunnelResourceAccessor`+`compute.instanceAdmin.v1`,
+Workload Identity Pool `github-pool`/Provider `github`, 레포 principalSet 바인딩)은
+**2026-07-13 gcloud로 구성 완료**. 재현이 필요하면 git log 및 `docs/PROGRESS.md` 참고.
+
+**남은 사람 작업 — GitHub Secrets 2개만 추가**하면 즉시 동작
+(레포 Settings > Secrets and variables > Actions > New repository secret):
+
+| Secret | 값 |
+| --- | --- |
+| `WIF_PROVIDER` | `projects/691089332676/locations/global/workloadIdentityPools/github-pool/providers/github` |
+| `DEPLOY_SA` | `deploy@reverse-502210.iam.gserviceaccount.com` |
+
+둘 다 비밀이 아니라 식별자일 뿐이다(민감정보 아님). 추가 후 Actions 탭에서 **Run workflow**로
+즉시 검증 가능. 매일 스케줄이 돌려면 VM이 켜져 있어야 한다(쉴 때 stop 하면 그날 배포는 실패).
+
+> ℹ️ 이전 SSH 키 기반 템플릿(`github-deploy.yml.example`)은 IAP 전환으로 폐기(삭제됨, 이슈 B 해결).
 
 ## 7. 운영 잔손질
 

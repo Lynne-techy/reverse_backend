@@ -6,7 +6,8 @@
 ## 상태
 `main` 최신 (2026-07-13). **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). VM `.env`에 실키 배치 완료(NODE_ENV=production, 600).
-남은 것: 런북 §6 CI/CD, §7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드) 결정.
+남은 것: §6 CI/CD **GitHub Secrets 2개 추가만 남음**(WIF_PROVIDER/DEPLOY_SA — 아래 최근 세션),
+§7 운영 잔손질(크론/모니터링/스냅샷), 이슈 A(레지스트리 빌드) 결정.
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
@@ -49,6 +50,15 @@ OCI Object Storage, 전체 성경 임포트 — 수직 슬라이스 이후.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 
 ## 최근 세션
+- 2026-07-13: **CI/CD 하루 1회 배포 배선(WIF + IAP, §6)** — `.github/workflows/deploy.yml`:
+  매일 19:00 UTC(04:00 KST)+수동, IAP 터널로 `git pull`→**변경 시에만 재빌드**(OOM 노출↓).
+  GCP: 배포 SA `deploy@`(iap.tunnelResourceAccessor+compute.instanceAdmin.v1), Workload Identity
+  Pool `github-pool`/Provider `github`(레포 `Lynne-techy/reverse_backend`로 조건 제한),
+  principalSet 바인딩 — **gcloud로 구성 완료**. SA 임퍼소네이션으로 IAP SSH→etri405a(docker그룹)→compose
+  접근까지 E2E 검증. 키 기반 예전 템플릿 삭제. **남은 사람 작업**: GitHub Secrets 2개(WIF_PROVIDER=
+  `projects/691089332676/locations/global/workloadIdentityPools/github-pool/providers/github`,
+  DEPLOY_SA=`deploy@reverse-502210.iam.gserviceaccount.com`) 추가하면 Run workflow로 즉시 동작.
+  주의: 스케줄 배포는 VM이 켜져 있어야 성공. gh CLI 미설치라 secret은 사용자가 UI에서 직접 추가.
 - 2026-07-13: **팀원 IAM + SSH IAP 전환(이슈 B 해결)** — 팀원 3명(jing07161@gmail.com,
   lynne@ahnbiz.com, daewoongdhwang@gmail.com)에게 `roles/editor`+`roles/iap.tunnelResourceAccessor` 부여.
   방화벽: `allow-ssh-iap`(22, 35.235.240.0/20만) 신설 후 `default-allow-ssh`/`default-allow-rdp`(전세계 개방) **삭제**.
