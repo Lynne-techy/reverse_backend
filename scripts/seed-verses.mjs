@@ -19,11 +19,32 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 }
 
 // 데이터 파일(스크립트 기준 상대경로). 전체 성경으로 확장 시 이 파일만 교체.
-const DATA_FILE = new URL('../data/verses.sample.json', import.meta.url);
+const DATA_FILE = new URL('../data/bible.json', import.meta.url);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+// 한 번의 upsert 요청에 담을 최대 행 수. 전체 성경(3만+건)을 한 방에 보내면
+// payload 한도/타임아웃에 걸리므로 이 단위로 잘라 여러 번 보낸다.
+const CHUNK_SIZE = 500;
+
+// rows 한 덩어리를 upsert 한다. 대량 적재라 .select()로 되돌려 받지 않고
+// count 옵션으로 반영된 행 수만 확인한다(응답을 가볍게 유지).
+async function upsertChunk(rows) {
+  const { error, count } = await supabase
+    .from('verses')
+    .upsert(rows, {
+      onConflict: 'translation_code,book_no,chapter,verse_no',
+      count: 'exact',
+    });
+
+  if (error) {
+    console.error('시드 실패:', error.message);
+    process.exit(1);
+  }
+  return count ?? rows.length;
+}
 
 async function main() {
   const raw = await readFile(DATA_FILE, 'utf-8');
@@ -38,20 +59,20 @@ async function main() {
     text: v.text,
   }));
 
-  const { data, error } = await supabase
-    .from('verses')
-    .upsert(rows, { onConflict: 'translation_code,book_no,chapter,verse_no' })
-    .select('id, book_name, chapter, verse_no');
+  // rows 를 CHUNK_SIZE 단위로 잘라 순차 upsert. 각 배치를 await 로 기다려
+  // 커넥션이 한꺼번에 몰리지 않게 하고, 진행 상황을 배치 단위로 출력한다.
+  const totalBatches = Math.ceil(rows.length / CHUNK_SIZE);
+  let total = 0;
 
-  if (error) {
-    console.error('시드 실패:', error.message);
-    process.exit(1);
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    total += await upsertChunk(chunk);
+
+    const batchNo = i / CHUNK_SIZE + 1;
+    console.log(`배치 ${batchNo}/${totalBatches} 완료 (누적 ${total}건)`);
   }
 
-  console.log(`verses ${data.length}건 적재 완료:`);
-  for (const r of data) {
-    console.log(`  #${r.id} ${r.book_name} ${r.chapter}:${r.verse_no}`);
-  }
+  console.log(`verses ${total}건 적재 완료 (총 ${rows.length}건 대상)`);
 }
 
 main().catch((err) => {

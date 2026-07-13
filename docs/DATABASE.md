@@ -111,7 +111,7 @@ erDiagram
 | 컬럼 | 타입 | 제약 | 설명 |
 |---|---|---|---|
 | id | bigint | PK (identity) | |
-| translation_code | text | not null | 번역본 (예: `GAE` 개역개정) |
+| translation_code | text | not null | 번역본 코드 (예: `KO_GAEGAEJEONG` 개역개정). 체계는 아래 표 참고 |
 | book_no | smallint | not null | 성경 책 번호 |
 | book_name | text | not null | 책 이름(표시용) |
 | chapter | smallint | not null | 장 |
@@ -121,6 +121,32 @@ erDiagram
 - **Unique**: `(translation_code, book_no, chapter, verse_no)` — 같은 번역본의 같은 절 중복 방지.
 
 > **결정 (2026-07-06)**: `book_no`의 1~66 범위 `check` 제약은 두지 않기로 했습니다. `verses`는 사용자 입력이 아니라 신뢰된 시딩 스크립트로만 채워지는 참조 테이블이라, DB 레벨 방어보다 시딩 스크립트 검증으로 충분하다고 판단했습니다.
+
+##### `translation_code` 코드 체계
+
+번역본(개역개정/새번역/NIV/ESV…)이 여러 개로 늘어나도 코드가 흔들리지 않도록 명명 규칙을 고정합니다.
+
+**형식**: `{LANG}_{VERSION}` — 전부 **대문자**.
+- `LANG`: 언어. **ISO 639-1** 2글자 코드 (예: `KO`, `EN`, 이후 `ZH` 등). `writing_sessions.language`(`ko`/`en`)와 접두사가 정렬됩니다 — Gemini 유사도 검사가 대조할 번역본을 언어로 좁힐 때 활용.
+- `VERSION`: 번역본 식별자. 로마자 대문자, **내부에 `_` 미포함**(→ `code.split('_')`가 항상 `[언어, 버전]` 2조각이 되어 파싱이 단순). 한글 번역본은 이름을 로마자화(개역개정 → `GAEGAEJEONG`).
+- 예: `KO_GAEGAEJEONG` = 한국어 + 개역개정.
+
+**매핑 테이블** (상태: ✅ 적재됨 / ⬜ 코드만 예약 — 실제 적재는 저작권 확인 후):
+
+| translation_code | 언어 | 번역본 | 상태 · 비고 |
+|---|---|---|---|
+| `KO_GAEGAEJEONG` | 한국어 | 개역개정 (개역개정판) | ✅ 적재됨 (66권 31,088절). 대한성서공회 저작권 |
+| `KO_GAEGAEHANGEUL` | 한국어 | 개역한글 | ⬜ 대한성서공회 저작권 |
+| `KO_SAEBEONYEOK` | 한국어 | 새번역 (표준새번역 개정) | ⬜ 대한성서공회 저작권 |
+| `KO_GONGDONG` | 한국어 | 공동번역 개정판 | ⬜ 대한성서공회 저작권 |
+| `KO_HYUNDAEIN` | 한국어 | 현대인의 성경 | ⬜ 생명의말씀사 저작권 |
+| `EN_KJV` | 영어 | King James Version | ⬜ 퍼블릭 도메인 |
+| `EN_NIV` | 영어 | New International Version | ⬜ Biblica 저작권 |
+| `EN_ESV` | 영어 | English Standard Version | ⬜ Crossway 저작권 |
+| `EN_NASB` | 영어 | New American Standard Bible | ⬜ Lockman 저작권 |
+| `EN_NLT` | 영어 | New Living Translation | ⬜ Tyndale 저작권 |
+
+> 위 목록은 **예약된 표준 코드**입니다. 새 번역본을 적재할 때는 임의로 코드를 만들지 말고 이 표에서 골라 쓰거나, 없으면 이 표에 먼저 한 줄 추가한 뒤 그 코드로 시딩합니다. 코드는 정의해두되 저작권이 있는 번역본의 본문 적재는 라이선스를 확인한 후 진행합니다(퍼블릭 도메인인 `EN_KJV` 외에는 대부분 저작권 있음).
 
 #### `emotion_tags` **[이후]** — 감정 태그 마스터 (8종)
 `code`(PK), `label_ko`, `sort_order`. 예: `comfort`(위로), `hope`(희망), `gratitude`(감사)…

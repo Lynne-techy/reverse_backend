@@ -61,3 +61,6 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# 대용량 성경 전문 데이터 (시딩 소스). 저장소 밖에서 별도 관리하고 seed-verses.mjs 로 적재.
+data/bible.json
