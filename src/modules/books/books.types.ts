@@ -3,6 +3,7 @@
  * summary/bookName 외 배경 필드는 자료 미비 시 null 일 수 있다.
  */
 export interface Book {
+  translationCode: string;
   bookNo: number;
   bookName: string;
   summary: string;

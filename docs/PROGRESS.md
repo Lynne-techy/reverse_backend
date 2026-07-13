@@ -53,21 +53,44 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 **진행 상태**:
 - [x] 마이그레이션(`20260713000000_users_language.sql`, `20260713010000_book_infos.sql`) 작성
   + 원격 반영 완료(`supabase migration list`로 in-sync 확인).
-- [~] `books` 모듈 스캐폴딩 완료(`types/repository/service/controller/module.ts`, `app.module.ts`
-  등록까지 완료, 빌드 통과) — `data/books.json`·`scripts/seed-books.mjs` 미작성.
-- [ ] 프로필 집계 API(Feature ①) 전체 — 착수 전.
-- [ ] `docs/DATABASE.md`에 `book_infos`/`users.language` 반영 — 착수 전.
+- [x] `books` 모듈 스캐폴딩 완료(`types/repository/service/controller/module.ts`, `app.module.ts`
+  등록까지 완료, 빌드 통과).
+- [x] **성경 66권 전체 배경 정보 시딩 완료**: `data/books.json`(66권 summary/author/written_period/
+  written_place/audience/core_theme, youtube_url은 전부 null로 구조만 확보) + `scripts/seed-books.mjs`
+  (`seed-verses.mjs`와 동일 패턴, PK `book_no` upsert). 원격 `book_infos` 테이블 66건 적재 확인 완료.
+  `data/books.json`은 `bible.json`처럼 이미 Supabase에 적재됐다고 판단해 **`.gitignore`에 추가**(저장소엔
+  안 올리고 로컬에서만 관리).
+- [x] **`book_infos` PK 확장 완료**: 새 마이그레이션(`20260713020000_book_infos_translation_pk.sql`)으로
+  `book_no` 단일 PK → `(translation_code, book_no)` 복합 PK로 교체(원격 반영 확인). `books` 모듈
+  (`types`/`repository`/`service`)에 `translationCode` 반영(현재는 `KO_GAEGAEJEONG` 상수 기본값 —
+  `verses` 모듈과 동일 패턴, 다중 번역본 실제 지원 시 파라미터화 예정). `data/books.json`에
+  `translation_code` 필드 추가, `seed-books.mjs` upsert 키를 `translation_code,book_no`로 변경 후
+  재시딩 완료. `GET /books/1`, `/books/66` 실동작 확인(`translationCode` 필드 포함 응답), `/books/999`는
+  설계대로 400.
+- [x] `docs/DATABASE.md`에 `book_infos`(복합 PK 포함)/`users.language` 반영 완료.
+- [ ] 프로필 집계 API(Feature ①) 전체 — 착수 전. **다음 세션 시작 지점.**
 
-**다음 세션 할 일**: 대표 5권(창세기/시편/요한복음/로마서/요한계시록) `data/books.json` 작성
-(book_no는 실제 verses 테이블 기준 창세기=1/시편=19/요한복음=43/로마서=45/요한계시록=66으로 확인 완료)
-+ `seed-books.mjs` → Feature ① 구현 → 문서/빌드/테스트 검증. 상세는 plan 파일 참고.
+**다음 세션 할 일**: 프로필 집계 API(Feature ①) 구현 — `GET /users/me/profile`
+(이름/이메일/streak/완필권수/진척률/필사기록/계정연결/언어설정). 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
+
+> `verses` 테이블의 주소/텍스트 정규화는 **보류**로 결정(성능 문제가 아니라 데이터 무결성 문제이고,
+> 이미 라이브 FK(`writing_sessions.key_verse_id`, `daily_verses.verse_id`)가 걸려 있어 리스크가 큼 —
+> 두 번째 번역본을 실제로 적재하게 될 때 재검토). `GET /verses` 성능 실측(포트폴리오용)은 프로젝트
+> 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-13: **`book_infos` 다국어 대응 확정** — 번역본별 콘텐츠(특히 `book_name` 표기 차이)를
+  담기 위해 PK를 `book_no` 단일 → `(translation_code, book_no)` 복합으로 확장(신규 마이그레이션,
+  원격 반영), `books` 모듈/`data/books.json`/`seed-books.mjs` 반영+재시딩, `GET /books/:bookNo`
+  실동작 확인, `docs/DATABASE.md`에 `book_infos`/`users.language` 반영까지 완료. 곁가지로 `verses`
+  정규화(주소/텍스트 분리)도 검토했으나 이 규모(3만~31만 행)에선 성능 이득이 없고 라이브 FK
+  리스크만 있어 보류.
 - 2026-07-13: **성경 전체 시딩(31,088절)+`translation_code` 체계+PR #3 merge** (완료 섹션 참조).
   새 브랜치 `feat/profile-book-info` 착수 — 프로필 집계 + 책 배경 정보 API 계획 승인, 마이그레이션
   2건 작성+원격 반영, `books` 모듈 스캐폴딩+앱 등록까지 완료. **브랜치 분기 시점이 낡아있던 문제
   발견**(로컬이 fetch 안 해서 `origin/main`이 PR #3·배포 완료 커밋들보다 뒤처진 지점) → `git fetch` +
-  `origin/main` 병합(충돌 없음, fast-forward)으로 최신화.
+  `origin/main` 병합(충돌 없음, fast-forward)으로 최신화. 이어서 **성경 66권 전체 배경 정보 시딩**
+  (`data/books.json` + `seed-books.mjs`, `book_infos` 테이블 66건 적재 확인).
 - 2026-07-13: **프로덕션 전체 스택 라이브 + CI/CD 완성** — VM에 실키 배치, GitHub Actions로 매일 1회
   자동 배포(WIF+IAP, 변경 시에만 재빌드) 실동작 검증. 팀원 IAM+IAP 터널 전환(SSH 전세계 개방 방화벽
   삭제). 프론트 Docker화 브랜치 main 병합 + VM 전환(신규 페이지 라우팅은 팀원 몫). 로컬 dev 매뉴얼 추가.

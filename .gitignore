@@ -64,3 +64,5 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # 대용량 성경 전문 데이터 (시딩 소스). 저장소 밖에서 별도 관리하고 seed-verses.mjs 로 적재.
 data/bible.json
+# 책 배경 정보 시딩 소스. 이미 Supabase에 적재 완료 — 저장소엔 안 올리고 로컬에서만 관리, seed-books.mjs 로 적재.
+data/books.json

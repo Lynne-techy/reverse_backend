@@ -99,11 +99,14 @@ erDiagram
 | provider | text | not null, check(`google`\|`kakao`) | 로그인 수단 |
 | display_name | text | null | 표시 이름 |
 | avatar_url | text | null | 프로필 이미지 |
+| language | text | not null, default `ko`, check(`ko`\|`en`) | 프로필 기본 언어 설정 |
 | created_at / updated_at | timestamptz | default now() | |
 
 **논의 포인트**: Supabase는 로그인하면 `auth.users`에 사용자를 자동 생성합니다. 우리 앱 전용 필드(닉네임 등)를 붙이려고 `public.users`를 **따로 두되 id를 똑같이 공유**합니다(1:1). 이러면 조인이 단순하고 동기화 고민이 적습니다.
 
 > 💡 **대안**: `auth.users`만 쓰고 별도 테이블을 안 만들 수도 있지만, `auth` 스키마는 Supabase가 관리해서 우리가 컬럼을 마음대로 못 넣습니다. 그래서 미러 테이블 방식이 일반적입니다.
+
+> **결정 (2026-07-13)**: 프로필 화면의 "언어 설정"을 위해 `language` 컬럼을 추가했습니다(`20260713000000_users_language.sql`, 기존 행은 default `'ko'`로 안전하게 채움). `writing_sessions.language`(그 필사 1건에 어떤 언어/번역본을 썼는지 — 세션별)와는 성격이 다릅니다. 이 컬럼은 "이 유저가 기본으로 선호하는 언어"입니다.
 
 ### 3-2. 성경 데이터
 
@@ -147,6 +150,24 @@ erDiagram
 | `EN_NLT` | 영어 | New Living Translation | ⬜ Tyndale 저작권 |
 
 > 위 목록은 **예약된 표준 코드**입니다. 새 번역본을 적재할 때는 임의로 코드를 만들지 말고 이 표에서 골라 쓰거나, 없으면 이 표에 먼저 한 줄 추가한 뒤 그 코드로 시딩합니다. 코드는 정의해두되 저작권이 있는 번역본의 본문 적재는 라이선스를 확인한 후 진행합니다(퍼블릭 도메인인 `EN_KJV` 외에는 대부분 저작권 있음).
+
+#### `book_infos` **[MVP]** — 성경 각 권(66권)의 배경 정보
+| 컬럼 | 타입 | 제약 | 설명 |
+|---|---|---|---|
+| translation_code | text | PK(복합 1/2) | `verses`와 동일한 코드 체계(위 표 참고) |
+| book_no | smallint | PK(복합 2/2), check(1~66) | 성경 책 번호 |
+| book_name | text | not null | 책 이름(표시용) |
+| summary | text | not null | 책 요약 |
+| author | text | null | 저자 |
+| written_period | text | null | 기록 시기 |
+| written_place | text | null | 기록 장소 |
+| audience | text | null | 수신 대상 |
+| core_theme | text | null | 핵심 주제 |
+| youtube_url | text | null | 해설 영상 링크 (컬럼만 확보, 링크 소싱은 보류) |
+
+- **PK**: `(translation_code, book_no)` 복합 — 번역본마다 배경 정보(특히 `book_name` 표기)가 달라질 수 있어 `verses`처럼 번역본 단위로 구분합니다.
+
+> **결정 (2026-07-13)**: 처음엔 `book_no` 단일 PK(`20260713010000_book_infos.sql`)로 시작했으나, 번역본별 콘텐츠를 담을 수 없다는 한계를 발견해 `(translation_code, book_no)` 복합 PK로 확장했습니다(`20260713020000_book_infos_translation_pk.sql` — 컬럼 추가 → 기존 66행 백필 → PK 교체 순서로 무중단 반영). `verses`는 서로게이트 `id` + UNIQUE 제약을 쓰지만, `book_infos`는 아직 이 테이블을 FK로 참조하는 곳이 없어 자연키(복합 PK)를 그대로 썼습니다 — 나중에 다른 테이블이 참조해야 하면 그때 서로게이트 id 도입을 재검토합니다. `verses`처럼 신뢰된 시딩 스크립트(`scripts/seed-books.mjs`, `data/books.json`)로만 채우는 참조 데이터입니다.
 
 #### `emotion_tags` **[이후]** — 감정 태그 마스터 (8종)
 `code`(PK), `label_ko`, `sort_order`. 예: `comfort`(위로), `hope`(희망), `gratitude`(감사)…

@@ -5,6 +5,7 @@ import { Book } from './books.types';
 
 /** public.book_infos 테이블의 행(snake_case). */
 interface BookInfoRow {
+  translation_code: string;
   book_no: number;
   book_name: string;
   summary: string;
@@ -20,6 +21,7 @@ interface BookInfoRow {
 /** DB 행(snake_case) → 앱 객체(camelCase) 변환. */
 function toBook(row: BookInfoRow): Book {
   return {
+    translationCode: row.translation_code,
     bookNo: row.book_no,
     bookName: row.book_name,
     summary: row.summary,
@@ -41,11 +43,15 @@ export class BooksRepository {
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
   ) {}
 
-  /** book_no로 단일 책 배경 정보 조회 (없으면 null). */
-  async findByBookNo(bookNo: number): Promise<Book | null> {
+  /** (translationCode, bookNo)로 단일 책 배경 정보 조회 (없으면 null). */
+  async findByBookNo(
+    translationCode: string,
+    bookNo: number,
+  ): Promise<Book | null> {
     const { data, error } = await this.supabase
       .from('book_infos')
       .select('*')
+      .eq('translation_code', translationCode)
       .eq('book_no', bookNo)
       .maybeSingle<BookInfoRow>();
 

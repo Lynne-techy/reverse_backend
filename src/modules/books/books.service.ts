@@ -6,6 +6,11 @@ import {
 import { BooksRepository } from './books.repository';
 import { Book } from './books.types';
 
+// 현재는 개역개정(KO_GAEGAEJEONG) 단일 번역본만 적재돼 있다.
+// verses 모듈과 동일하게, 여러 번역본을 실제로 지원하게 되면 이 상수 대신
+// 요청 파라미터(예: 사용자 언어 설정)로 대체한다.
+const DEFAULT_TRANSLATION_CODE = 'KO_GAEGAEJEONG';
+
 /**
  * 책 배경 정보 비즈니스 로직.
  */
@@ -24,7 +29,10 @@ export class BooksService {
       );
     }
 
-    const book = await this.booksRepository.findByBookNo(bookNo);
+    const book = await this.booksRepository.findByBookNo(
+      DEFAULT_TRANSLATION_CODE,
+      bookNo,
+    );
     if (!book) {
       throw new NotFoundException(
         `책 배경 정보를 찾을 수 없습니다: book_no=${bookNo}`,
