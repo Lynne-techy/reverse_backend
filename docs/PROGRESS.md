@@ -73,10 +73,31 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
   재시딩 완료. `GET /books/1`, `/books/66` 실동작 확인(`translationCode` 필드 포함 응답), `/books/999`는
   설계대로 400.
 - [x] `docs/DATABASE.md`에 `book_infos`(복합 PK 포함)/`users.language` 반영 완료.
-- [ ] 프로필 집계 API(Feature ①) 전체 — 착수 전. **다음 세션 시작 지점.**
+- [x] `users.language` 코드 반영: `user.types.ts`(`LANGUAGES`/`Language`), `user.repository.ts`
+  (`UserRow.language`+매핑+`updateProfile` patch), `update-profile.dto.ts`(`@IsIn` 검증) 완료.
+- [x] 완필/진척률 계산 `progress-calculator.ts`(순수함수, Learn-by-Doing으로 직접 구현) 완료 +
+  jest 단위테스트 6종(빈 기록/부분 커버/완필/범위 중복/미등록 book 무시/0-분모 방어) 전부 통과.
+  이를 위해 `writing.repository.findPassedRangesByUser`(통과 세션 범위 조회), `verse.repository
+  .countVersesPerBook`(RPC) + `VerseService` 노출까지 신설.
+- [x] **RPC 첫 사례 도입**: `count_verses_per_book`(book_no별 총 절수 group by 집계)는
+  `.from()`으로 표현 불가해 Postgres 함수로 신설(`supabase/migrations/
+  20260714000000_count_verses_per_book_fn.sql`). `supabase db push`로 원격 반영 완료, 실제 호출로
+  검증 완료(66권 합계 31,088로 시딩값과 일치).
+- [x] `@supabase/postgrest-js` 2.110.0에서 `.returns<T>()` deprecated 확인 → `.overrideTypes<T,
+  {merge:false}>()`로 전면 교체(신규 코드 + 기존 `verse.repository.findRange`까지 통일). 단,
+  `.rpc()` 체인은 Database 타입 생성 없이 쓰는 이 프로젝트 특성상 반환 타입 추론이 어긋나
+  `overrideTypes`가 안 먹어서 `countVersesPerBook`만 `data`를 직접 `as` 캐스팅하는 방식으로 우회.
+- [x] (범위 축소) 필사기록 목록(`recentWritings`/`GET /writing-sessions` 신규 엔드포인트)은
+  드롭 결정 — 기존 `StatsService.getMyStatistics().totalCount`(통과 필사 총 횟수)로 충분하다고
+  판단, `findByUser`/`listMyWritings` 불필요.
+- [ ] 계정 연결(identities) 조회 — `UserRepository.getLinkedProviders(userId)`,
+  `auth.users.identities` 기반 `{google,kakao}` boolean. **다음 세션 시작 지점.**
+- [ ] 프로필 집계 오케스트레이션(`UserService.getMyProfile`) + `UserModule`에 `StatsModule`/
+  `WritingModule` import + `UserController` `GET /me/profile` 추가.
+- [ ] 최종 `npm run build`/`jest` 전체 재확인 + mock 토큰으로 `GET /api/users/me/profile` 수동 검증.
 
-**다음 세션 할 일**: 프로필 집계 API(Feature ①) 구현 — `GET /users/me/profile`
-(이름/이메일/streak/완필권수/진척률/필사기록/계정연결/언어설정). 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
+**다음 세션 할 일**: ①계정 연결(identities) 조회 구현 → ②프로필 집계 오케스트레이션+컨트롤러 →
+③빌드/테스트/수동 검증. 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
 
 > `verses` 테이블의 주소/텍스트 정규화는 **보류**로 결정(성능 문제가 아니라 데이터 무결성 문제이고,
 > 이미 라이브 FK(`writing_sessions.key_verse_id`, `daily_verses.verse_id`)가 걸려 있어 리스크가 큼 —
@@ -84,18 +105,11 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
-- 2026-07-13: **`book_infos` 다국어 대응 확정** — 번역본별 콘텐츠(특히 `book_name` 표기 차이)를
-  담기 위해 PK를 `book_no` 단일 → `(translation_code, book_no)` 복합으로 확장(신규 마이그레이션,
-  원격 반영), `books` 모듈/`data/books.json`/`seed-books.mjs` 반영+재시딩, `GET /books/:bookNo`
-  실동작 확인, `docs/DATABASE.md`에 `book_infos`/`users.language` 반영까지 완료. 곁가지로 `verses`
-  정규화(주소/텍스트 분리)도 검토했으나 이 규모(3만~31만 행)에선 성능 이득이 없고 라이브 FK
-  리스크만 있어 보류.
-- 2026-07-13: **성경 전체 시딩(31,088절)+`translation_code` 체계+PR #3 merge** (완료 섹션 참조).
-  새 브랜치 `feat/profile-book-info` 착수 — 프로필 집계 + 책 배경 정보 API 계획 승인, 마이그레이션
-  2건 작성+원격 반영, `books` 모듈 스캐폴딩+앱 등록까지 완료.
-- 2026-07-13: **인프라 마무리(main, 병렬 진행)** — 레지스트리 빌드 전환(이슈 A 해결), 유사도 검사
-  동시성 캡(`SIMILARITY_MAX_CONCURRENCY`), 운영 잔손질(§7 헬스체크 크론/주간 스냅샷/Ops Agent),
-  프론트 `feat/docker-nginx`→main 병합, 로컬 dev 매뉴얼 — 상세는 위 "완료 (배포/운영)" 섹션과
-  git log 참고.
-- 2026-07-06 ~ 07-12: W2 수직 슬라이스(verse/writing/stats 모듈, Gemini 유사도 검사, Docker화,
-  배포 인프라 구축) — 상세는 위 "완료" 섹션과 git log 참고.
+- 2026-07-14 ~ 07-15: 프로필 집계 API(Feature ①) 진행 — `users.language` 코드 반영,
+  `progress-calculator.ts`(완필/진척률 순수함수) 구현+jest 6종 통과, RPC 첫 도입
+  (`count_verses_per_book`, 원격 반영+실동작 검증 완료), `.returns()` deprecated → `overrideTypes`
+  전환. 필사기록 목록 기능은 `stats.totalCount`로 충분하다고 판단해 범위에서 제외. 상세는 위
+  "진행 중" 섹션 참고.
+- 2026-07-06 ~ 07-13: W1/W2 수직 슬라이스, 성경 전체 시딩(31,088절)+`translation_code` 체계,
+  프로덕션 배포/CI/CD 인프라(레지스트리 빌드 전환 포함), `books` 모듈+`book_infos`(복합 PK) —
+  상세는 위 "완료" 섹션들과 git log 참고.
