@@ -45,4 +45,9 @@ export class VerseService {
   ): Promise<Verse[]> {
     return this.verseRepository.findRange(bookNo, chapter, from, to);
   }
+
+  /** 번역본의 book_no별 총 절수(진척률 계산 비교 기준). */
+  countVersesPerBook(translationCode: string): Promise<Map<number, number>> {
+    return this.verseRepository.countVersesPerBook(translationCode);
+  }
 }

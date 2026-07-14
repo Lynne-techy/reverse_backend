@@ -11,6 +11,10 @@ export function isAuthProvider(value: unknown): value is AuthProvider {
   );
 }
 
+/** 프로필 언어 설정(한국어/영어). writing_sessions.language 와 달리 유저의 기본 선호값이다. */
+export const LANGUAGES = ['ko', 'en'] as const;
+export type Language = (typeof LANGUAGES)[number];
+
 /**
  * 앱 사용자 프로필. id 는 Supabase auth.users.id 와 동일하다.
  * (평범한 데이터 객체 — 프레임워크/DB와 무관)
@@ -21,6 +25,7 @@ export interface User {
   provider: AuthProvider;
   displayName: string | null;
   avatarUrl: string | null;
+  language: Language;
   createdAt: string;
   updatedAt: string;
 }

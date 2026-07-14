@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../../common/supabase/supabase.constants';
 import type { Env } from '../../config/env.validation';
 import {
+  PassedWritingRange,
   WritingLanguage,
   WritingSession,
   WritingSessionStatus,
@@ -189,6 +190,35 @@ export class WritingRepository {
     if (error) {
       throw new Error(`잔류 processing 세션 정리 실패: ${error.message}`);
     }
+  }
+
+  /**
+   * 진척률 계산용 — 통과(passed=true)한 세션들의 필사 범위만 조회한다.
+   * (progress-calculator.ts의 calculateProgress 입력)
+   */
+  async findPassedRangesByUser(userId: string): Promise<PassedWritingRange[]> {
+    const { data, error } = await this.supabase
+      .from('writing_sessions')
+      .select('book_no, chapter, start_verse_no, end_verse_no')
+      .eq('user_id', userId)
+      .eq('passed', true)
+      .overrideTypes<
+        Pick<
+          WritingSessionRow,
+          'book_no' | 'chapter' | 'start_verse_no' | 'end_verse_no'
+        >[],
+        { merge: false }
+      >();
+
+    if (error) {
+      throw new Error(`통과 필사 범위 조회 실패: ${error.message}`);
+    }
+    return (data ?? []).map((row) => ({
+      bookNo: row.book_no,
+      chapter: row.chapter,
+      startVerseNo: row.start_verse_no,
+      endVerseNo: row.end_verse_no,
+    }));
   }
 
   /** Storage에서 필사 이미지를 내려받는다 (백그라운드 유사도 검사용). */

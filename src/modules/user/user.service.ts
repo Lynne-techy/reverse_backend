@@ -26,6 +26,7 @@ export class UserService {
     return this.userRepository.updateProfile(userId, {
       displayName: dto.displayName,
       avatarUrl: dto.avatarUrl,
+      language: dto.language,
     });
   }
 

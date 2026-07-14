@@ -70,7 +70,7 @@ export class VerseRepository {
       .gte('verse_no', from)
       .lte('verse_no', to)
       .order('verse_no', { ascending: true })
-      .returns<VerseRow[]>();
+      .overrideTypes<VerseRow[], { merge: false }>();
 
     if (error) {
       throw new Error(`구절 범위 조회 실패: ${error.message}`);
@@ -130,5 +130,26 @@ export class VerseRepository {
     if (error) {
       throw new Error(`오늘의 말씀 배정 실패: ${error.message}`);
     }
+  }
+
+  /**
+   * 번역본의 book_no별 총 절수. 프로필 진척률(완필 판정) 계산의 비교 기준이다.
+   * group by 집계는 `.from()`으로 표현할 수 없어 RPC(count_verses_per_book)로 조회한다.
+   * 전체 절수(진척률 분모)는 이 Map 값들의 합으로 구하면 되므로 별도 조회는 두지 않는다.
+   */
+  async countVersesPerBook(
+    translationCode: string,
+  ): Promise<Map<number, number>> {
+    // Database 타입 생성 없이 SupabaseClient를 쓰는 탓에 .rpc()의 반환 타입 추론이
+    // (단일 객체로) 어긋나 overrideTypes/returns 체이닝이 통하지 않는다. data를 직접 단언한다.
+    const { data, error } = await this.supabase.rpc('count_verses_per_book', {
+      p_translation_code: translationCode,
+    });
+
+    if (error) {
+      throw new Error(`책별 절수 집계 실패: ${error.message}`);
+    }
+    const rows = (data ?? []) as { book_no: number; verse_count: number }[];
+    return new Map(rows.map((row) => [row.book_no, row.verse_count]));
   }
 }

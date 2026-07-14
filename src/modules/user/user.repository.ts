@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../../common/supabase/supabase.constants';
-import { AuthProvider, isAuthProvider, User } from './user.types';
+import { AuthProvider, isAuthProvider, Language, User } from './user.types';
 
 /** public.users 테이블의 행(snake_case). */
 interface UserRow {
@@ -10,6 +10,7 @@ interface UserRow {
   provider: string;
   display_name: string | null;
   avatar_url: string | null;
+  language: Language;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +26,7 @@ function toUser(row: UserRow): User {
     provider: row.provider,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+    language: row.language,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -84,7 +86,11 @@ export class UserRepository {
 
   async updateProfile(
     id: string,
-    changes: { displayName?: string | null; avatarUrl?: string | null },
+    changes: {
+      displayName?: string | null;
+      avatarUrl?: string | null;
+      language?: Language;
+    },
   ): Promise<User> {
     const patch: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -94,6 +100,9 @@ export class UserRepository {
     }
     if (changes.avatarUrl !== undefined) {
       patch.avatar_url = changes.avatarUrl;
+    }
+    if (changes.language !== undefined) {
+      patch.language = changes.language;
     }
 
     const { data, error } = await this.supabase
