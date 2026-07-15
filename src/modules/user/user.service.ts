@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserRepository } from './user.repository';
-import { AuthProvider, User } from './user.types';
+import { AuthProvider, LinkedProviders, User } from './user.types';
 
 /**
  * User 비즈니스 로직. controller 와 repository 사이에서 규칙을 처리한다.
@@ -19,6 +19,11 @@ export class UserService {
     return user;
   }
 
+  /** 내 계정 연결 상태 조회 (google/kakao 연결 여부). */
+  async getLinkedProviders(userId: string): Promise<LinkedProviders> {
+    return this.userRepository.getLinkedProviders(userId);
+  }
+
   /** 내 프로필 수정. */
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
     // 존재 확인 후 수정 (없으면 404)
@@ -26,6 +31,7 @@ export class UserService {
     return this.userRepository.updateProfile(userId, {
       displayName: dto.displayName,
       avatarUrl: dto.avatarUrl,
+      language: dto.language,
     });
   }
 

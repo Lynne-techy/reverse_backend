@@ -36,3 +36,11 @@ export interface WritingSession {
   createdAt: string;
   completedAt: string | null;
 }
+
+/** 진척률 계산 입력 — 통과(passed=true)한 필사 세션의 범위만 추출한 값. */
+export interface PassedWritingRange {
+  bookNo: number;
+  chapter: number;
+  startVerseNo: number;
+  endVerseNo: number;
+}
