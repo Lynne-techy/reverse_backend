@@ -1,10 +1,21 @@
 # 클라이언트 로그인·인증 흐름 (실제 서비스 기준)
 
-프론트엔드가 실제 서비스에서 로그인을 어떻게 처리하고, 그 토큰으로 우리 백엔드와
+프론트엔드가 실제 서비스에서 **구글/카카오 로그인**을 어떻게 처리하고, 그 토큰으로 우리 백엔드와
 어떻게 통신하는지 정리한 문서입니다.
 
 > 테스트용 임시 토큰(`POST /dev/token`)은 이 흐름을 개발 중에 흉내 낸 것입니다.
 > 실제 배포 앱은 아래 흐름을 따릅니다. 테스트 절차는 `CLIENT_TEST_GUIDE.md` 참고.
+
+### provider 활성화 상태
+
+| provider | Supabase 설정 | 클라이언트에서 쓸 수 있나 |
+|---|---|---|
+| **google** | ✅ 완료(실제 로그인 → 백엔드 토큰 검증 통과 확인) | ✅ 지금 바로 |
+| **kakao** | ⬜ 미설정 (Supabase 대시보드에서 provider 등록 필요) | 설정 후 가능 |
+
+> 백엔드는 두 provider 모두 이미 허용합니다(`AUTH_PROVIDERS = ['google', 'kakao']`).
+> 카카오는 **Supabase 대시보드에 Kakao provider를 켜기만** 하면 백엔드 코드 변경 없이 동작합니다
+> (구글과 동일한 절차 — 카카오 개발자 콘솔에서 REST API 키/Client Secret 발급 → Supabase에 등록).
 
 ---
 
@@ -22,11 +33,11 @@
 
 ```
 [클라이언트 앱]
-   │  ① supabase.auth.signInWithOAuth({ provider: 'google' })
+   │  ① supabase.auth.signInWithOAuth({ provider: 'google' | 'kakao' })
    ▼
-[Supabase Auth] ──② 구글 로그인 페이지로 리다이렉트──▶ [Google]
-   │                                                     │
-   │  ◀───③ 사용자 동의, 구글이 신원 확인─────────────────┘
+[Supabase Auth] ──② provider 로그인 페이지로 리다이렉트──▶ [Google / Kakao]
+   │                                                        │
+   │  ◀───③ 사용자 동의, provider가 신원 확인────────────────┘
    ▼
 [Supabase] ──④ auth.users 생성/갱신 + 세션 발급──▶ [클라이언트 앱]
    │                            (access_token + refresh_token)
@@ -51,19 +62,29 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // 공개 키 (앱에 넣어도 안전)
 
-// 1) 로그인 버튼 클릭 시 — 구글 OAuth 시작
-async function login() {
-  await supabase.auth.signInWithOAuth({ provider: 'google' });
-  // 구글 로그인 페이지로 이동 → 동의 → 앱으로 리다이렉트되어 돌아옴
+// 1) 로그인 버튼 클릭 시 — 소셜 OAuth 시작
+//    provider 값만 바꾸면 됩니다: 'google' | 'kakao'
+async function login(provider) {
+  await supabase.auth.signInWithOAuth({
+    provider, // 'google' 또는 'kakao'
+    options: {
+      // 로그인 후 돌아올 앱 주소. Supabase 대시보드 Redirect URLs에 등록돼 있어야 함.
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+  // provider 로그인 페이지로 이동 → 동의 → redirectTo 주소로 리다이렉트되어 돌아옴
 }
+// 예: <button onClick={() => login('google')}>구글로 로그인</button>
+//     <button onClick={() => login('kakao')}>카카오로 로그인</button>
 
-// 2) 돌아온 뒤 현재 세션(토큰) 획득
+// 2) 돌아온 뒤 현재 세션(토큰) 획득 (SDK가 콜백 URL의 토큰을 자동 파싱해 세션에 저장)
 const { data: { session } } = await supabase.auth.getSession();
 const accessToken = session?.access_token;
 
-// 3) 우리 백엔드 호출 시 헤더에 토큰 첨부
+// 3) 우리 백엔드 호출 시 헤더에 토큰 첨부 (모든 API는 /api prefix)
 async function getMyProfile() {
-  const res = await fetch('http://localhost:3000/users/me', {
+  const res = await fetch(`${API_BASE_URL}/api/users/me`, {
+    // 로컬: http://localhost:3000 · 운영: https://reverse-growthlog.com
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return res.json();
