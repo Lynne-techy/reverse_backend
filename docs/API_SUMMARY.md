@@ -35,4 +35,4 @@
 
 ## 진행 중 (아직 미완료)
 
-- [ ] `GET /users/me/profile` — streak/완필권수/진척률을 묶은 프로필 집계 API. 계산 로직(완필/진척률)은 완료, 오케스트레이션+컨트롤러 연결이 남음. (계정 연결은 별도 `GET /users/me/linked-providers`로 분리 완료 — 무거운 admin API 호출을 프로필에서 떼어냄)
+- [ ] `GET /users/me/progress` — streak/완필권수/진척률. 계산 로직(완필/진척률 순수함수)은 완료, 오케스트레이션+컨트롤러 연결이 남음. 마이페이지는 `GET /users/me`·`/progress`·`/linked-providers` 3개를 병렬 호출(하나로 묶는 집계 엔드포인트는 두지 않음 — 무거운 조회는 각자 분리)

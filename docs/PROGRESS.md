@@ -98,12 +98,17 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
   pass-through, 존재 확인 불필요 — 데이터가 검증된 JWT의 auth.users에서 옴) + `UserController`
   핸들러. mock 토큰으로 Postman 검증 완료(`{google:false,kakao:false}` — 이메일/비번 mock
   유저라 identity가 email뿐이므로 정상). auth JWT 검증 코드 주석 정리도 함께.
-- [ ] 프로필 집계 오케스트레이션(`UserService.getMyProfile`) + `UserModule`에 `StatsModule`/
-  `WritingModule` import + `UserController` `GET /me/profile` 추가. (계정 연결은 이제 미포함 —
-  위 별도 엔드포인트로 분리했으므로 streak/완필권수/진척률만 묶는다.)
-- [ ] 최종 `npm run build`/`jest` 전체 재확인 + mock 토큰으로 `GET /api/users/me/profile` 수동 검증.
+- [ ] **진척률 전용 엔드포인트 `GET /users/me/progress`** — streak/완필권수/진척률 반환.
+  `GET /me/profile` 번들 집계는 **폐기(완전 분리로 결정)**: 계정 연결을 뗀 "무거우면 분리" 원칙을
+  진척률에도 동일 적용. 마이페이지는 `GET /users/me`(기본,이미 있음) + `/progress`(신규) +
+  `/linked-providers`(완료) **3개를 프론트에서 병렬 호출**. 남은 배선: `calculateProgress`
+  (순수함수, 완료)를 실제로 호출하는 오케스트레이션 서비스 메서드 — 입력 `findPassedRangesByUser`
+  (writing.repo, 완료)+`countVersesPerBook`(verse.service, 완료)를 조합 → 컨트롤러 핸들러.
+  `StatsService.getMyStatistics`(streak/총필사)와 합쳐 한 응답으로 줄지, progress만 줄지는
+  착수 시 결정.
+- [ ] 최종 `npm run build`/`jest` 전체 재확인 + mock 토큰으로 `GET /api/users/me/progress` 수동 검증.
 
-**다음 세션 할 일**: ①프로필 집계 오케스트레이션+컨트롤러(`GET /me/profile`, 계정 연결 제외) →
+**다음 세션 할 일**: ①`GET /users/me/progress` 진척률 오케스트레이션+컨트롤러(번들 집계 없음) →
 ②빌드/테스트/수동 검증. 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
 
 > `verses` 테이블의 주소/텍스트 정규화는 **보류**로 결정(성능 문제가 아니라 데이터 무결성 문제이고,
