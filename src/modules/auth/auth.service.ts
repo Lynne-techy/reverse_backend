@@ -32,6 +32,9 @@ export class AuthService {
   async verifyToken(accessToken: string): Promise<AuthenticatedUser> {
     let payload: JWTPayload;
     try {
+      // jwks (공개키) 로 서명이 진짜인지 확인
+      // issuer: 누가 발급했는지 확인
+      // audience: 누구/무엇을 위한 토큰인가 -> authenticated 여야 통과
       const result = await jwtVerify(accessToken, this.jwks, {
         issuer: this.issuer,
         audience: 'authenticated',

@@ -4,7 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserService } from './user.service';
-import { User } from './user.types';
+import { LinkedProviders, User } from './user.types';
 
 @ApiTags('users')
 @ApiBearerAuth('access-token')
@@ -17,6 +17,15 @@ export class UserController {
   @Get('me')
   getMe(@CurrentUser() user: AuthenticatedUser): Promise<User> {
     return this.userService.getProfile(user.userId);
+  }
+
+  /** GET /users/me/linked-providers — 내 계정 연결 상태 */
+  @ApiOperation({ summary: '내 계정 연결 상태 조회' })
+  @Get('me/linked-providers')
+  getLinkedProviders(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LinkedProviders> {
+    return this.userService.getLinkedProviders(user.userId);
   }
 
   /** PATCH /users/me — 내 프로필 수정 */

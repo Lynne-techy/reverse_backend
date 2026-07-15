@@ -16,6 +16,12 @@ export const LANGUAGES = ['ko', 'en'] as const;
 export type Language = (typeof LANGUAGES)[number];
 
 /**
+ * 계정 연결 상태. provider별 연결 여부 boolean 맵.
+ * 예: { google: true, kakao: false } — 구글은 연결됨, 카카오는 미연결.
+ */
+export type LinkedProviders = Record<AuthProvider, boolean>;
+
+/**
  * 앱 사용자 프로필. id 는 Supabase auth.users.id 와 동일하다.
  * (평범한 데이터 객체 — 프레임워크/DB와 무관)
  */

@@ -90,14 +90,21 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 - [x] (범위 축소) 필사기록 목록(`recentWritings`/`GET /writing-sessions` 신규 엔드포인트)은
   드롭 결정 — 기존 `StatsService.getMyStatistics().totalCount`(통과 필사 총 횟수)로 충분하다고
   판단, `findByUser`/`listMyWritings` 불필요.
-- [ ] 계정 연결(identities) 조회 — `UserRepository.getLinkedProviders(userId)`,
-  `auth.users.identities` 기반 `{google,kakao}` boolean. **다음 세션 시작 지점.**
+- [x] **계정 연결(identities) 조회 완료** — 원래 프로필 집계에 묶으려던 계획을 바꿔 **별도
+  서브 리소스 엔드포인트로 분리**(`GET /users/me/linked-providers` → `{google,kakao}` boolean).
+  근거: `auth.admin.getUserById()`(service_role admin API)는 무거워, 자주 불리는 프로필 조회에
+  끼우면 "이름만 필요한" 호출까지 비용을 냄. 프론트는 프로필·연결상태·진척률을 병렬 호출.
+  `UserRepository.getLinkedProviders`(identities → 화이트리스트 필터) + `UserService`(얇은
+  pass-through, 존재 확인 불필요 — 데이터가 검증된 JWT의 auth.users에서 옴) + `UserController`
+  핸들러. mock 토큰으로 Postman 검증 완료(`{google:false,kakao:false}` — 이메일/비번 mock
+  유저라 identity가 email뿐이므로 정상). auth JWT 검증 코드 주석 정리도 함께.
 - [ ] 프로필 집계 오케스트레이션(`UserService.getMyProfile`) + `UserModule`에 `StatsModule`/
-  `WritingModule` import + `UserController` `GET /me/profile` 추가.
+  `WritingModule` import + `UserController` `GET /me/profile` 추가. (계정 연결은 이제 미포함 —
+  위 별도 엔드포인트로 분리했으므로 streak/완필권수/진척률만 묶는다.)
 - [ ] 최종 `npm run build`/`jest` 전체 재확인 + mock 토큰으로 `GET /api/users/me/profile` 수동 검증.
 
-**다음 세션 할 일**: ①계정 연결(identities) 조회 구현 → ②프로필 집계 오케스트레이션+컨트롤러 →
-③빌드/테스트/수동 검증. 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
+**다음 세션 할 일**: ①프로필 집계 오케스트레이션+컨트롤러(`GET /me/profile`, 계정 연결 제외) →
+②빌드/테스트/수동 검증. 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
 
 > `verses` 테이블의 주소/텍스트 정규화는 **보류**로 결정(성능 문제가 아니라 데이터 무결성 문제이고,
 > 이미 라이브 FK(`writing_sessions.key_verse_id`, `daily_verses.verse_id`)가 걸려 있어 리스크가 큼 —
@@ -105,6 +112,10 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-15: 계정 연결 상태 조회를 **별도 엔드포인트로 분리** 구현·검증
+  (`GET /users/me/linked-providers`, repository/service/controller 3계층 + Postman 확인).
+  프로필 집계는 무겁지 않게 유지하려 계정 연결을 떼어냄. auth JWT 검증 흐름(비대칭 서명/JWKS
+  공개키/RLS 우회 service_role) 학습 정리. `API_SUMMARY.md`에 신규 엔드포인트 반영.
 - 2026-07-14 ~ 07-15: 프로필 집계 API(Feature ①) 진행 — `users.language` 코드 반영,
   `progress-calculator.ts`(완필/진척률 순수함수) 구현+jest 6종 통과, RPC 첫 도입
   (`count_verses_per_book`, 원격 반영+실동작 검증 완료), `.returns()` deprecated → `overrideTypes`
