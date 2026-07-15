@@ -7,7 +7,7 @@
 `main` 최신. **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). CI/CD는 **레지스트리 빌드로 전환 완료**(GitHub Actions가 빌드해
 Artifact Registry push, VM은 pull만 — 매일 1회 자동 배포). 로컬 `.env` 있음(개발/시딩 가능).
-현재 작업 브랜치: **`feat/profile-book-info`**(아래 "진행 중" 참고). 남은 것: 프론트
+현재 작업 브랜치: **`feat/user-progress`**(아래 "진행 중" 참고). 남은 것: 프론트
 `RecommendPage` 실제 구현(팀원), 모니터링 알림 정책(선택), e2-medium 리사이즈(부하 시).
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
@@ -47,8 +47,12 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 - [ ] streak-calculator 연속(+1)/끊김(리셋) 케이스 jest 보강(첫필사/같은날만 검증됨)
 - [ ] 프론트 신규 페이지(Login/pilsa/heatmap 등) 라우터 배선 — 팀원 작업
+- [ ] 밤하늘 밝기용 **절별 필사 횟수** 엔드포인트 — 마이페이지 별밤(0→3회 밝기)은 절 주소별
+  카운트 배열이 필요. `/progress` 요약(3개 숫자)과 별개 데이터라 분리.
+- [ ] 절수 라벨/분모 정합 — 프론트 밤하늘 라벨 31,102절 vs 시딩(개역개정) 31,088절 불일치.
+  진척률 분모는 백엔드(31,088) 기준이라 라벨과 어긋남. 어느 쪽이 정본인지 정하고 맞추기.
 
-## 진행 중: `feat/profile-book-info` (프로필 조회 API + 책 배경 정보 API)
+## 진행 중: `feat/user-progress` (진척률/계정연결 API + 책 배경 정보 API)
 계획 승인 완료(plan: `~/.claude/plans/supabase-humble-barto.md`). 두 기능:
 1. **프로필**: `GET /users/me/profile` — 이름/이메일/streak/완필권수(정밀 절 커버리지)/진척률/
    필사기록/계정연결(auth.users.identities 조회)/언어설정.
@@ -98,18 +102,20 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
   pass-through, 존재 확인 불필요 — 데이터가 검증된 JWT의 auth.users에서 옴) + `UserController`
   핸들러. mock 토큰으로 Postman 검증 완료(`{google:false,kakao:false}` — 이메일/비번 mock
   유저라 identity가 email뿐이므로 정상). auth JWT 검증 코드 주석 정리도 함께.
-- [ ] **진척률 전용 엔드포인트 `GET /users/me/progress`** — streak/완필권수/진척률 반환.
-  `GET /me/profile` 번들 집계는 **폐기(완전 분리로 결정)**: 계정 연결을 뗀 "무거우면 분리" 원칙을
-  진척률에도 동일 적용. 마이페이지는 `GET /users/me`(기본,이미 있음) + `/progress`(신규) +
-  `/linked-providers`(완료) **3개를 프론트에서 병렬 호출**. 남은 배선: `calculateProgress`
-  (순수함수, 완료)를 실제로 호출하는 오케스트레이션 서비스 메서드 — 입력 `findPassedRangesByUser`
-  (writing.repo, 완료)+`countVersesPerBook`(verse.service, 완료)를 조합 → 컨트롤러 핸들러.
-  `StatsService.getMyStatistics`(streak/총필사)와 합쳐 한 응답으로 줄지, progress만 줄지는
-  착수 시 결정.
-- [ ] 최종 `npm run build`/`jest` 전체 재확인 + mock 토큰으로 `GET /api/users/me/progress` 수동 검증.
+- [x] **진척률 전용 엔드포인트 `GET /users/me/progress`** — 완필권수/전체진척/점등절수 반환(streak/
+  총필사는 기존 stats에 그대로, **progress만** 반환하기로 결정). `GET /me/profile` 번들 집계는
+  폐기(완전 분리). 마이페이지는 `GET /users/me` + `/progress`(신규) + `/linked-providers` **3개
+  병렬 호출**. 오케스트레이션은 **`WritingService.getMyProgress`**에 둠(재료 `findPassedRangesByUser`
+  +`countVersesPerBook`+`calculateProgress`가 모두 writing 도메인) → `UserService`가 얇은
+  pass-through → `UserController` `GET me/progress`. `UserModule`이 `WritingModule` import(순환 없음).
+  **진척률 = 정경 커버리지로 확정**(번역본별 아님): 밤하늘 UI가 "31,102절 밤하늘 = 절 주소당 별 하나"라
+  같은 절을 여러 언어로 필사해도 주소로 dedupe(현 `findPassedRangesByUser`가 translation 무관이라 정합).
+- [x] `npm run build` 통과 + `jest` 36/36 통과 + 앱 부팅 시 DI 순환 없음·라우트 매핑 확인.
+  실제 Supabase 토큰으로 `GET /api/users/me/progress` Postman 인증 실요청 검증 완료(기대 응답
+  `{coveredVerses,completedBooks,progressRate}` 일치).
 
-**다음 세션 할 일**: ①`GET /users/me/progress` 진척률 오케스트레이션+컨트롤러(번들 집계 없음) →
-②빌드/테스트/수동 검증. 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
+**다음 세션 할 일**: ①실제 Supabase 토큰으로 `GET /api/users/me/progress` 인증 실요청 스모크
+테스트(위 참고) → ②PR 정리/머지. 상세는 plan 파일(`~/.claude/plans/supabase-humble-barto.md`) 참고.
 
 > `verses` 테이블의 주소/텍스트 정규화는 **보류**로 결정(성능 문제가 아니라 데이터 무결성 문제이고,
 > 이미 라이브 FK(`writing_sessions.key_verse_id`, `daily_verses.verse_id`)가 걸려 있어 리스크가 큼 —
@@ -117,6 +123,11 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-15: **`GET /users/me/progress` 진척률 엔드포인트 배선 완료**(progress만 반환, streak 분리).
+  오케스트레이션은 `WritingService.getMyProgress` → `UserService` pass-through → `UserController`.
+  진척률 = 정경 커버리지(번역본 통합)로 확정 — 밤하늘 UI 목업(31,102절=주소당 별)이 근거. build/jest
+  36/36/부팅 DI·라우트 확인. 밤하늘 밝기(절별 필사 횟수) 엔드포인트·절수 라벨(31,102 vs 31,088) 정합은
+  백로그로. 실제 토큰 인증 스모크만 남음(비대칭 JWKS라 mock 불가).
 - 2026-07-15: 계정 연결 상태 조회를 **별도 엔드포인트로 분리** 구현·검증
   (`GET /users/me/linked-providers`, repository/service/controller 3계층 + Postman 확인).
   프로필 집계는 무겁지 않게 유지하려 계정 연결을 떼어냄. auth JWT 검증 흐름(비대칭 서명/JWKS
