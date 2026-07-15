@@ -14,6 +14,7 @@ import type { Env } from '../../config/env.validation';
 import { HandwritingCheckService } from '../handwriting-check/handwriting-check.service';
 import { StatsService } from '../stats/stats.service';
 import { VerseService } from '../verse/verse.service';
+import { calculateProgress, ProgressSnapshot } from './progress-calculator';
 import { WritingRepository } from './writing.repository';
 import {
   PASS_MIN_SIMILARITY_SCORE,
@@ -28,6 +29,9 @@ const CLAIMABLE_STATUSES: WritingSessionStatus[] = [
   'uploaded',
   'failed',
 ];
+
+/** 진척률 분모로 쓸 기준 번역본. 다중 번역본 지원 전까지 단일 하드코딩. */
+const DEFAULT_TRANSLATION_CODE = 'KO_GAEGAEJEONG';
 
 @Injectable()
 export class WritingService implements OnApplicationBootstrap {
@@ -63,6 +67,20 @@ export class WritingService implements OnApplicationBootstrap {
       // 정리 실패가 부팅을 막을 일은 아니다. 로그만 남긴다.
       this.logger.error('잔류 processing 세션 정리 실패', error);
     }
+  }
+
+  /**
+   * 내 진척률(완필 권수/전체 진척/점등 절수)을 계산한다.
+   * 통과한 필사 범위(주소 기준, 번역본 무관)를 기준 번역본의 절수와 대조한다 —
+   * 같은 절을 여러 언어로 필사해도 주소가 같으면 하나로 dedupe된다(정경 커버리지).
+   */
+  async getMyProgress(userId: string): Promise<ProgressSnapshot> {
+    const passedRanges =
+      await this.writingRepository.findPassedRangesByUser(userId);
+    const verseTotals = await this.verseService.countVersesPerBook(
+      DEFAULT_TRANSLATION_CODE,
+    );
+    return calculateProgress(passedRanges, verseTotals);
   }
 
   /**

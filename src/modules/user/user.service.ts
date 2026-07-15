@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { ProgressSnapshot } from '../writing/progress-calculator';
+import { WritingService } from '../writing/writing.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserRepository } from './user.repository';
 import { AuthProvider, LinkedProviders, User } from './user.types';
@@ -8,7 +10,10 @@ import { AuthProvider, LinkedProviders, User } from './user.types';
  */
 @Injectable()
 export class UserService {
-  constructor(private readonly userRepository: UserRepository) {}
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly writingService: WritingService,
+  ) {}
 
   /** 내 프로필 조회 (없으면 404). */
   async getProfile(userId: string): Promise<User> {
@@ -22,6 +27,15 @@ export class UserService {
   /** 내 계정 연결 상태 조회 (google/kakao 연결 여부). */
   async getLinkedProviders(userId: string): Promise<LinkedProviders> {
     return this.userRepository.getLinkedProviders(userId);
+  }
+
+  /**
+   * 내 진척률 조회 (완필 권수/전체 진척/점등 절수).
+   * 계산은 필사 도메인 소관이라 WritingService에 위임한다(얇은 pass-through).
+   * userId는 검증된 JWT에서 오므로 별도 존재 확인은 하지 않는다.
+   */
+  async getMyProgress(userId: string): Promise<ProgressSnapshot> {
+    return this.writingService.getMyProgress(userId);
   }
 
   /** 내 프로필 수정. */
