@@ -35,8 +35,21 @@ export interface WritingSession {
   passed: boolean | null;
   /** complete 요청의 클라이언트 로컬 날짜(YYYY-MM-DD). 잔디/streak 기준일. complete 전에는 null. */
   clientDate: string | null;
+  /** QT 묵상 — complete 시 선택 입력. 미작성이면 null. */
+  meditation: string | null;
+  /** QT 적용 — complete 시 선택 입력. 미작성이면 null. */
+  application: string | null;
+  /** QT 기도제목 — complete 시 선택 입력. 미작성이면 null. */
+  prayer: string | null;
   createdAt: string;
   completedAt: string | null;
+}
+
+/** complete 시 함께 저장하는 QT(묵상/적용/기도제목) 입력. 모두 선택. */
+export interface QtInput {
+  meditation?: string;
+  application?: string;
+  prayer?: string;
 }
 
 /** 진척률 계산 입력 — 통과(passed=true)한 필사 세션의 범위만 추출한 값. */

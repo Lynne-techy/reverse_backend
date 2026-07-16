@@ -208,11 +208,17 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
 `date`(YYYY-MM-DD, 클라이언트 로컬 날짜)가 잔디/streak 기준일 — `/verses/today`와 동일 방침.
 `failed` 세션은 같은 요청으로 재시도 가능.
 
+QT(`meditation` 묵상 / `application` 적용 / `prayer` 기도제목)는 **모두 선택 입력**(각 최대 500자).
+공백만 보내면 미작성(null)으로 저장됩니다. 완료 후 별도 수정 API는 없습니다(기획상 완료 후 작성 불가).
+
 ```json
 // Request
 {
     "keyVerseId": 14261,       // 필사 범위 안의 절이어야 함
-    "date": "2026-07-15"       // 클라이언트 로컬 날짜
+    "date": "2026-07-15",      // 클라이언트 로컬 날짜
+    "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",  // 선택
+    "application": "오늘 결정할 일을 내 명철 대신 기도로 시작한다.",    // 선택
+    "prayer": "흔들리는 진로 앞에서 주님을 신뢰하게 하소서."           // 선택
 }
 
 // Response — 검사 결과는 아직 없음(폴링으로 확인)
@@ -231,6 +237,9 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
     "similarityScore": null,
     "passed": null,
     "clientDate": "2026-07-15",
+    "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",
+    "application": "오늘 결정할 일을 내 명철 대신 기도로 시작한다.",
+    "prayer": "흔들리는 진로 앞에서 주님을 신뢰하게 하소서.",
     "createdAt": "2026-07-16T12:53:13.871186+00:00",
     "completedAt": null
 }
@@ -260,6 +269,9 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
   "similarityScore": 100,
   "passed": true,
   "clientDate": "2026-07-15",
+  "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",
+  "application": "오늘 결정할 일을 내 명철 대신 기도로 시작한다.",
+  "prayer": "흔들리는 진로 앞에서 주님을 신뢰하게 하소서.",
   "createdAt": "2026-07-16T12:53:13.871186+00:00",
   "completedAt": "2026-07-16T13:42:22.6+00:00"
 }

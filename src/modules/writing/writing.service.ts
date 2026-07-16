@@ -18,6 +18,7 @@ import { calculateProgress, ProgressSnapshot } from './progress-calculator';
 import { WritingRepository } from './writing.repository';
 import {
   PASS_MIN_SIMILARITY_SCORE,
+  QtInput,
   WritingLanguage,
   WritingSession,
   WritingSessionStatus,
@@ -142,6 +143,7 @@ export class WritingService implements OnApplicationBootstrap {
     sessionId: string,
     keyVerseId: number,
     clientDate: string,
+    qt: QtInput,
   ): Promise<WritingSession> {
     // clientDate(클라이언트 로컬 날짜)가 잔디/streak의 기록 기준일이 된다.
     // DTO 정규식은 형식만 보장하므로 2026-02-31처럼 실존하지 않는 날짜를 여기서
@@ -191,6 +193,11 @@ export class WritingService implements OnApplicationBootstrap {
       sessionId,
       keyVerseId,
       clientDate,
+      {
+        meditation: this.normalizeQtText(qt.meditation),
+        application: this.normalizeQtText(qt.application),
+        prayer: this.normalizeQtText(qt.prayer),
+      },
       CLAIMABLE_STATUSES,
     );
     if (!claimed) {
@@ -214,6 +221,17 @@ export class WritingService implements OnApplicationBootstrap {
     );
 
     return claimed;
+  }
+
+  /**
+   * QT(묵상/적용/기도제목) 입력을 저장용 값으로 정규화한다.
+   * DTO 검증은 형식(문자열, 500자)만 보장하므로, "사실상 미작성"인 입력을
+   * 여기서 null로 통일한다 — 최근 필사 기록 화면의 "(묵상 미작성)" 판단이
+   * null 여부에 의존하기 때문이다.
+   */
+  private normalizeQtText(value: string | undefined): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
   }
 
   /**
