@@ -4,7 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { GetActivityQueryDto } from './dto/get-activity.dto';
 import { StatsService } from './stats.service';
-import { DailyActivity, UserStatistics } from './stats.types';
+import { DailyActivity, MyStatistics } from './stats.types';
 
 @ApiTags('stats')
 @ApiBearerAuth('access-token')
@@ -12,15 +12,16 @@ import { DailyActivity, UserStatistics } from './stats.types';
 export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
-  /** GET /stats/me — 내 streak/총 필사 수 요약 */
+  /** GET /stats/me — 내 streak/총 필사 수 요약 + 스트릭 시작 배너 정보 */
   @ApiOperation({
     summary: '내 통계 조회',
-    description: '현재 연속 일수(streak), 최고 기록, 총 필사 수를 반환한다.',
+    description:
+      '현재 연속 일수(streak), 최고 기록, 총 필사 수와 스트릭 시작일의 첫 필사(streakStart, 못 찾으면 null)를 반환한다.',
   })
   @Get('me')
   getMyStatistics(
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<UserStatistics> {
+  ): Promise<MyStatistics> {
     return this.statsService.getMyStatistics(user.userId);
   }
 

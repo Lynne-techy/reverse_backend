@@ -32,8 +32,8 @@
 
 ## stats — 통계/잔디
 
-- [x] `GET /stats/me` — 현재 streak, 최고 기록, 총 필사 수
-- [x] `GET /stats/activity?from=&to=` — 구간 내 날짜별 통과 필사 수 (잔디 데이터)
+- [x] `GET /stats/me` — 현재 streak, 최고 기록, 총 필사 수 + `streakStart`(스트릭 시작일의 첫 통과 필사 `{ date, bookNo, bookName, chapter }`, 못 찾으면 null — 배너 문구용)
+- [x] `GET /stats/activity?from=&to=` — 구간 내 날짜별 통과 필사 수 (잔디 데이터). "올해 기록일"은 `from=1월1일`로 받아 행 수를 세면 됨(활동 있는 날만 행 존재)
 
 ## books — 책 배경 정보
 

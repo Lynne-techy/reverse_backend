@@ -190,6 +190,7 @@ export class WritingService implements OnApplicationBootstrap {
     const claimed = await this.writingRepository.claimForProcessing(
       sessionId,
       keyVerseId,
+      clientDate,
       CLAIMABLE_STATUSES,
     );
     if (!claimed) {
@@ -220,9 +221,9 @@ export class WritingService implements OnApplicationBootstrap {
    * completed(통과/불통과) 또는 failed(검사 자체 실패, 재시도 가능)로 마감한다.
    */
   /**
-   * @param clientDate 잔디/streak 기준일. 세션 레코드에 저장하지 않고 메모리로만
-   *   전달한다 — 서버가 도중에 죽으면 세션이 failed가 되고, 재시도 complete 요청이
-   *   clientDate를 다시 가져오므로 백그라운드 작업과 수명이 같다.
+   * @param clientDate 잔디/streak 기준일. claim 시점에 세션의 client_date로도
+   *   저장된다("그날 뭘 필사했는지" 역추적용 — 스트릭 시작 배너 등). 검사 흐름
+   *   자체는 세션을 다시 읽지 않도록 메모리 값을 그대로 쓴다.
    */
   private async processSimilarity(
     session: WritingSession,

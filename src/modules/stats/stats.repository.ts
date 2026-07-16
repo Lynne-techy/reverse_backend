@@ -116,6 +116,32 @@ export class StatsRepository {
     }
   }
 
+  /**
+   * 해당 날짜(클라이언트 로컬)의 첫 통과 필사(책/장)를 조회한다 — 스트릭 시작
+   * 배너용. writing_sessions는 writing 모듈 소유지만, WritingModule이 이미
+   * StatsModule을 임포트하고 있어(통과 시 recordWriting 호출) 역방향 임포트는
+   * 순환이 된다. 읽기 전용 단일 쿼리라 stats 쪽에 두는 것을 택했다.
+   */
+  async findFirstPassedWriting(
+    userId: string,
+    date: string,
+  ): Promise<{ bookNo: number; chapter: number } | null> {
+    const { data, error } = await this.supabase
+      .from('writing_sessions')
+      .select('book_no, chapter')
+      .eq('user_id', userId)
+      .eq('client_date', date)
+      .eq('passed', true)
+      .order('completed_at', { ascending: true })
+      .limit(1)
+      .maybeSingle<{ book_no: number; chapter: number }>();
+
+    if (error) {
+      throw new Error(`스트릭 시작 필사 조회 실패: ${error.message}`);
+    }
+    return data ? { bookNo: data.book_no, chapter: data.chapter } : null;
+  }
+
   /** [from, to] 구간의 일자별 활동을 조회한다(잔디 렌더링용). */
   async findActivityRange(
     userId: string,
@@ -129,7 +155,7 @@ export class StatsRepository {
       .gte('activity_date', from)
       .lte('activity_date', to)
       .order('activity_date', { ascending: true })
-      .returns<DailyActivityRow[]>();
+      .overrideTypes<DailyActivityRow[], { merge: false }>();
 
     if (error) {
       throw new Error(`잔디 구간 조회 실패: ${error.message}`);

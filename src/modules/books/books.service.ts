@@ -40,4 +40,13 @@ export class BooksService {
     }
     return book;
   }
+
+  /**
+   * 내부 모듈용 조회 — 없으면 예외 대신 null을 돌려준다.
+   * getByBookNo는 HTTP 응답(400/404)에 결합된 controller용 API라,
+   * 다른 모듈(stats의 스트릭 시작 배너 등)이 재사용할 때는 이쪽을 쓴다.
+   */
+  findByBookNo(bookNo: number): Promise<Book | null> {
+    return this.booksRepository.findByBookNo(DEFAULT_TRANSLATION_CODE, bookNo);
+  }
 }

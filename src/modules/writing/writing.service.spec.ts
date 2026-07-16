@@ -199,6 +199,7 @@ describe('WritingService', () => {
       expect(repository.claimForProcessing).toHaveBeenCalledWith(
         'session-1',
         keyVerse.id,
+        clientDate,
         ['pending', 'uploaded', 'failed'],
       );
       await flushBackgroundJobs();
