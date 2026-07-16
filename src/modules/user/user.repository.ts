@@ -68,18 +68,26 @@ export class UserRepository {
     id: string;
     email: string;
     provider: AuthProvider;
+    /** 최초 생성 시에만 시딩할 초기 표시명. 이후 로그인에서 덮어쓰면 안 된다. */
+    displayName?: string;
   }): Promise<User> {
+    const row: Record<string, unknown> = {
+      id: input.id,
+      email: input.email,
+      provider: input.provider,
+      updated_at: new Date().toISOString(),
+    };
+
+    // 새 유저인 경우 display_name 값을 넣어준다.
+    // 기존 유저인 경우 display_name 을 빼고 update 한다.
+    const user = await this.findById(input.id);
+    if (!user && input.displayName) {
+      row['display_name'] = input.displayName;
+    }
+
     const { data, error } = await this.supabase
       .from('users')
-      .upsert(
-        {
-          id: input.id,
-          email: input.email,
-          provider: input.provider,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' },
-      )
+      .upsert(row, { onConflict: 'id' })
       .select('*')
       .single<UserRow>();
 

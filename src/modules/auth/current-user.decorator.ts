@@ -13,6 +13,11 @@ export interface AuthenticatedUser {
   userId: string; // = auth.users.id (JWT sub)
   email: string;
   provider: AuthProvider;
+  /**
+   * provider가 준 표시용 이름(user_metadata.full_name). 사용자가 클라이언트에서
+   * 수정 가능한 값이라 신뢰도가 낮다 — 최초 프로필 생성 시 display_name 시딩에만 쓴다.
+   */
+  fullName?: string;
 }
 
 /**
