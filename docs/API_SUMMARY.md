@@ -13,7 +13,7 @@
 
 - [x] `GET /users/me` — 내 프로필 조회
 - [x] `GET /users/me/linked-providers` — 계정 연결 상태 (`{ google, kakao }` boolean 맵). `auth.users.identities` 실시간 조회
-- [x] `GET /users/me/progress` — 내 진척률 (`{ coveredVerses, completedBooks, progressRate }`). 통과 필사 범위를 정경 절 커버리지로 계산(번역본 무관, 절 주소 dedupe). streak/총필사는 `GET /stats/me` 별도 호출
+- [x] `GET /users/me/progress` — 내 진척률 (`{ coveredVerses, totalVerses, completedBooks, progressRate }`). 통과 필사 범위를 정경 절 커버리지로 계산(번역본 무관, 절 주소 dedupe). streak/총필사는 `GET /stats/me` 별도 호출
 - [x] `PATCH /users/me` — 내 프로필 수정 (`displayName`, `avatarUrl`, `language` — 모두 선택, 보낸 필드만 갱신)
 
 > 마이페이지는 `GET /users/me`·`/progress`·`/linked-providers`(+ `/stats/me`)를 프론트에서 병렬 호출합니다.
@@ -28,7 +28,7 @@
 
 - [x] `POST /writing-sessions/upload-url` — 필사 이미지 업로드용 presigned URL + 세션 생성 (`book`, `chapter`, `startVerseNo`, `endVerseNo`, `language`)
 - [x] `GET /writing-sessions/:id` — 세션 조회. `status`가 `processing → completed/failed`로 바뀌는 걸 폴링으로 확인
-- [x] `POST /writing-sessions/:id/complete` — 기록 저장 (`keyVerseId`). Gemini 유사도 검사가 백그라운드로 시작되고 즉시 응답 반환
+- [x] `POST /writing-sessions/:id/complete` — 기록 저장 (`keyVerseId`, `date`). `date`(YYYY-MM-DD, 클라이언트 로컬 날짜)가 잔디/streak 기준일 — `/verses/today`와 동일 방침. Gemini 유사도 검사가 백그라운드로 시작되고 즉시 응답 반환
 
 ## stats — 통계/잔디
 

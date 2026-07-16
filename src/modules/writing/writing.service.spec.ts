@@ -19,6 +19,9 @@ import { WritingSession } from './writing.types';
 const flushBackgroundJobs = () =>
   new Promise((resolve) => setImmediate(resolve));
 
+/** complete 요청에 실리는 클라이언트 로컬 날짜. 잔디/streak 기준일이 된다. */
+const clientDate = '2026-07-12';
+
 const baseSession: WritingSession = {
   id: 'session-1',
   userId: 'user-1',
@@ -131,13 +134,20 @@ describe('WritingService', () => {
     it('세션이 없으면 404', async () => {
       repository.findById.mockResolvedValue(null);
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('실존하지 않는 날짜면 400 (형식은 DTO 정규식을 통과하는 값)', async () => {
+      await expect(
+        service.complete('user-1', 'session-1', keyVerse.id, '2026-02-31'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.claimForProcessing).not.toHaveBeenCalled();
     });
 
     it('남의 세션이면 403', async () => {
       await expect(
-        service.complete('other-user', 'session-1', keyVerse.id),
+        service.complete('other-user', 'session-1', keyVerse.id, clientDate),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -147,7 +157,7 @@ describe('WritingService', () => {
         status: 'completed',
       });
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -157,33 +167,33 @@ describe('WritingService', () => {
         status: 'processing',
       });
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('key verse가 없으면 404', async () => {
       verseService.findById.mockResolvedValue(null);
       await expect(
-        service.complete('user-1', 'session-1', 999),
+        service.complete('user-1', 'session-1', 999, clientDate),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('key verse가 필사 범위 밖이면 400', async () => {
       verseService.findById.mockResolvedValue({ ...keyVerse, verseNo: 1 });
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('동시 요청이 먼저 선점해 클레임이 비면 409', async () => {
       repository.claimForProcessing.mockResolvedValue(null);
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('선점 후 processing 세션을 즉시 반환한다', async () => {
-      const result = await service.complete('user-1', 'session-1', keyVerse.id);
+      const result = await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
 
       expect(result.status).toBe('processing');
       expect(repository.claimForProcessing).toHaveBeenCalledWith(
@@ -195,7 +205,7 @@ describe('WritingService', () => {
     });
 
     it('통과 점수면 completed(passed=true)로 마감하고 잔디/streak에 반영한다', async () => {
-      await service.complete('user-1', 'session-1', keyVerse.id);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
       await flushBackgroundJobs();
 
       expect(handwritingCheckService.checkAndLog).toHaveBeenCalledWith(
@@ -207,9 +217,10 @@ describe('WritingService', () => {
         similarityScore: 92,
         passed: true,
       });
+      // 잔디 기준일은 서버 시간이 아니라 요청에 실린 클라이언트 로컬 날짜다.
       expect(statsService.recordWriting).toHaveBeenCalledWith(
         'user-1',
-        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        clientDate,
       );
     });
 
@@ -219,7 +230,7 @@ describe('WritingService', () => {
         similarityScore: 40,
       });
 
-      await service.complete('user-1', 'session-1', keyVerse.id);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
       await flushBackgroundJobs();
 
       expect(repository.markCompleted).toHaveBeenCalledWith(
@@ -235,7 +246,7 @@ describe('WritingService', () => {
         isPenHandwriting: false,
       });
 
-      await service.complete('user-1', 'session-1', keyVerse.id);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
       await flushBackgroundJobs();
 
       expect(repository.markCompleted).toHaveBeenCalledWith(
@@ -251,7 +262,7 @@ describe('WritingService', () => {
         similarityScore: null,
       });
 
-      await service.complete('user-1', 'session-1', keyVerse.id);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
       await flushBackgroundJobs();
 
       expect(repository.markCompleted).toHaveBeenCalledWith(
@@ -266,7 +277,7 @@ describe('WritingService', () => {
         new Error('Gemini down'),
       );
 
-      await service.complete('user-1', 'session-1', keyVerse.id);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
       await flushBackgroundJobs();
 
       expect(repository.markFailed).toHaveBeenCalledWith('session-1');
@@ -277,7 +288,7 @@ describe('WritingService', () => {
     it('범위 원문이 비어 있으면 failed로 남긴다', async () => {
       verseService.getRange.mockResolvedValue([]);
 
-      await service.complete('user-1', 'session-1', keyVerse.id);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
       await flushBackgroundJobs();
 
       expect(repository.markFailed).toHaveBeenCalledWith('session-1');
@@ -290,7 +301,7 @@ describe('WritingService', () => {
         status: 'failed',
       });
 
-      const result = await service.complete('user-1', 'session-1', keyVerse.id);
+      const result = await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
 
       expect(result.status).toBe('processing');
       await flushBackgroundJobs();

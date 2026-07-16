@@ -123,6 +123,14 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-16: **잔디/streak 기준일을 서버 UTC → 클라이언트 로컬 날짜로 변경** ⚠️ 팀원 공유 필요
+  (stats/잔디 흐름은 다른 팀원 작업 영역). ①`POST /writing-sessions/:id/complete` body에 `date`
+  (YYYY-MM-DD) **필수 필드 추가** — 프론트 breaking change, `/verses/today`와 동일 방침.
+  ②`StatsService.recordWriting`에 서버 UTC 대신 이 clientDate가 전달됨(세션 DB엔 저장 안 하고
+  complete→백그라운드 검사로 메모리 전달 — 재시도 시 새 요청이 다시 가져오므로 수명 일치).
+  ③검증은 실존 날짜만(2026-02-31 등 400) — 서버 시간과의 오차 검증은 지금 단계에선 과하다고
+  판단해 **의도적으로 생략**(클라이언트 신고 신뢰, MVP). 부수: `ProgressSnapshot`에 `totalVerses`
+  (진척률 분모) 필드 추가. build + 전체 jest 37/37 통과.
 - 2026-07-15: **실제 구글 OAuth 로그인 활성화** — Supabase 대시보드에 Google provider 등록
   (구글 콘솔에서 OAuth 클라이언트 생성 → Client ID/Secret을 Supabase에 저장, 콜백 URL 교환),
   브라우저 authorize 흐름으로 발급받은 **진짜 토큰이 백엔드 인증 통과 확인**(mock의 provider 강제
