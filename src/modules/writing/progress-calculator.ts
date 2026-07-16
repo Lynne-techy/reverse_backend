@@ -4,6 +4,8 @@ import { PassedWritingRange } from './writing.types';
 export interface ProgressSnapshot {
   /** 통과한 필사가 커버한 고유 절 수 (범위 중복 제거). */
   coveredVerses: number;
+  /** 번역본 전체 절 수(진척률 분모). UI의 "1,108 / 31,102절" 표시용. */
+  totalVerses: number;
   /** 책의 모든 절을 커버해 완필로 판정된 책 수. */
   completedBooks: number;
   /** coveredVerses / 전체 절수 * 100 (0~100). */
@@ -57,6 +59,7 @@ export function calculateProgress(
 
   return {
     coveredVerses,
+    totalVerses: verseTotalCount,
     completedBooks,
     progressRate,
   };
