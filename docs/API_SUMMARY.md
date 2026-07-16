@@ -4,14 +4,20 @@
 요청/응답 예시가 필요하면 `docs/CLIENT_TEST_GUIDE.md`(Postman 따라하기용)를 참고하세요.
 
 - **Base URL**: `https://reverse-growthlog.com/api` (프로덕션) / `http://localhost:3000` (로컬)
-- **인증**: 별도 로그인 API 없음. Supabase 구글 로그인으로 받은 토큰을 `Authorization: Bearer <token>`
-  헤더에 담아 요청. 로컬 개발 중엔 `POST /dev/token`(개발 환경 전용, 인증 불필요)으로 mock 토큰 발급 가능.
+- **인증**: 별도 로그인 API 없음. Supabase 소셜 로그인으로 받은 토큰을 `Authorization: Bearer <token>`
+  헤더에 담아 요청. **구글 로그인 활성화 완료**(실제 로그인 → 백엔드 검증 통과 확인), 카카오는 백엔드
+  허용되어 있으나 Supabase 대시보드 provider 설정 대기. 상세는 `docs/CLIENT_AUTH_FLOW.md` 참고. 로컬
+  개발 중엔 `POST /dev/token`(개발 환경 전용, 인증 불필요)으로 mock 토큰 발급 가능.
 
 ## users — 내 프로필
 
 - [x] `GET /users/me` — 내 프로필 조회
 - [x] `GET /users/me/linked-providers` — 계정 연결 상태 (`{ google, kakao }` boolean 맵). `auth.users.identities` 실시간 조회
+- [x] `GET /users/me/progress` — 내 진척률 (`{ coveredVerses, completedBooks, progressRate }`). 통과 필사 범위를 정경 절 커버리지로 계산(번역본 무관, 절 주소 dedupe). streak/총필사는 `GET /stats/me` 별도 호출
 - [x] `PATCH /users/me` — 내 프로필 수정 (`displayName`, `avatarUrl`, `language` — 모두 선택, 보낸 필드만 갱신)
+
+> 마이페이지는 `GET /users/me`·`/progress`·`/linked-providers`(+ `/stats/me`)를 프론트에서 병렬 호출합니다.
+> 하나로 묶는 집계 엔드포인트는 두지 않습니다 — 무거운 조회(identities/진척률)는 각자 분리해 "이름만 필요한" 호출에 비용을 얹지 않기 위함.
 
 ## verses — 구절
 
@@ -32,7 +38,3 @@
 ## books — 책 배경 정보
 
 - [x] `GET /books/:bookNo` — 책(1~66) 요약·저자·기록시기·기록장소·수신대상·핵심주제·유튜브 링크(현재 전부 null)
-
-## 진행 중 (아직 미완료)
-
-- [ ] `GET /users/me/progress` — streak/완필권수/진척률. 계산 로직(완필/진척률 순수함수)은 완료, 오케스트레이션+컨트롤러 연결이 남음. 마이페이지는 `GET /users/me`·`/progress`·`/linked-providers` 3개를 병렬 호출(하나로 묶는 집계 엔드포인트는 두지 않음 — 무거운 조회는 각자 분리)
