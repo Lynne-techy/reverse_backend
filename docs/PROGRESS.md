@@ -123,6 +123,13 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-15: **실제 구글 OAuth 로그인 활성화** — Supabase 대시보드에 Google provider 등록
+  (구글 콘솔에서 OAuth 클라이언트 생성 → Client ID/Secret을 Supabase에 저장, 콜백 URL 교환),
+  브라우저 authorize 흐름으로 발급받은 **진짜 토큰이 백엔드 인증 통과 확인**(mock의 provider 강제
+  주입 불필요 — 실제 OAuth는 `app_metadata.provider=google` 자동). 백엔드 코드 변경 0(리소스
+  서버라 provider만 켜면 동작). 카카오는 동일 절차로 provider만 켜면 됨(미설정) — `users.provider`
+  CHECK 제약·`AUTH_PROVIDERS`·`getLinkedProviders`가 이미 카카오 대비 완료라 테이블 변경 불필요.
+  클라이언트 연동 가이드 `docs/CLIENT_AUTH_FLOW.md`에 구글/카카오 반영. `seed-mock-user.mjs` 테스트 curl `/api` prefix 정정.
 - 2026-07-15: **`GET /users/me/progress` 진척률 엔드포인트 배선 완료**(progress만 반환, streak 분리).
   오케스트레이션은 `WritingService.getMyProgress` → `UserService` pass-through → `UserController`.
   진척률 = 정경 커버리지(번역본 통합)로 확정 — 밤하늘 UI 목업(31,102절=주소당 별)이 근거. build/jest

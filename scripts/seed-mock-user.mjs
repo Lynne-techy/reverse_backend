@@ -86,7 +86,7 @@ async function main() {
   console.log('\n--- ACCESS TOKEN (아래 값을 Bearer 로 사용) ---');
   console.log(accessToken);
   console.log('\n테스트:');
-  console.log(`  curl -s http://localhost:3000/users/me -H "Authorization: Bearer ${accessToken}"`);
+  console.log(`  curl -s http://localhost:3000/api/users/me -H "Authorization: Bearer ${accessToken}"`);
 }
 
 main().catch((err) => {
