@@ -52,6 +52,7 @@ export class AuthGuard implements CanActivate {
         id: user.userId,
         email: user.email,
         provider: user.provider,
+        displayName: user.fullName,
       });
       this.provisioned.add(user.userId);
     }

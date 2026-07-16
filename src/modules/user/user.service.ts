@@ -57,6 +57,8 @@ export class UserService {
     id: string;
     email: string;
     provider: AuthProvider;
+    /** 최초 생성 시에만 시딩할 초기 표시명 (provider가 준 full_name). */
+    displayName?: string;
   }): Promise<User> {
     return this.userRepository.upsertFromAuth(input);
   }

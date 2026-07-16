@@ -7,8 +7,9 @@
 `main` 최신. **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). CI/CD는 **레지스트리 빌드로 전환 완료**(GitHub Actions가 빌드해
 Artifact Registry push, VM은 pull만 — 매일 1회 자동 배포). 로컬 `.env` 있음(개발/시딩 가능).
-현재 작업 브랜치: **`feat/user-progress`**(아래 "진행 중" 참고). 남은 것: 프론트
-`RecommendPage` 실제 구현(팀원), 모니터링 알림 정책(선택), e2-medium 리사이즈(부하 시).
+현재 작업 브랜치: **`chore/review-fixes`** — clientDate 전환·streakStart·API 문서 개편 등
+6커밋, main으로 PR 예정. 남은 것: 프론트 `RecommendPage` 실제 구현(팀원), 모니터링 알림
+정책(선택), e2-medium 리사이즈(부하 시).
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
 ## 완료 (W1)
@@ -45,7 +46,6 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 - [ ] 구절 검색/목록 API 확장 — 현재 `GET /verses`는 같은 장 범위 조회만.
 - [ ] (미정) QT(묵상/적용/기도) — 자유 텍스트 vs 태그 제안형 미확정.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
-- [ ] streak-calculator 연속(+1)/끊김(리셋) 케이스 jest 보강(첫필사/같은날만 검증됨)
 - [ ] 프론트 신규 페이지(Login/pilsa/heatmap 등) 라우터 배선 — 팀원 작업
 - [ ] 밤하늘 밝기용 **절별 필사 횟수** 엔드포인트 — 마이페이지 별밤(0→3회 밝기)은 절 주소별
   카운트 배열이 필요. `/progress` 요약(3개 숫자)과 별개 데이터라 분리.
@@ -123,6 +123,34 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-16: **API 문서 전면 개편 + 프로필·설정 화면 대조**. `API_SUMMARY.md`에 기능별
+  소제목(`###`)·상단 목차·전 엔드포인트 실측 응답 예시 추가(노션 팀 공유용) + CLAUDE.md에
+  "API 변경 시 문서 동기화" 규칙 추가. 프로필·설정 화면 대조 결과 **백엔드 갭 없음** 확인
+  (완필 표시는 `completedBooks` 숫자로 충분, 데모 초기화는 백엔드 불요, 스탬프/알림/백업은
+  추후). 최초 프로비저닝 시 provider full_name으로 `display_name` 시딩(c761c01)도 이 브랜치에 포함.
+- 2026-07-16: **잔디 페이지 대응 — `writing_sessions.client_date` 저장 + `/stats/me`에 `streakStart` 추가**.
+  잔디 페이지 배너("2개월 전 시편 1편으로 시작…")에 필요한 "스트릭 시작일에 뭘 필사했나"를 지원.
+  ①마이그레이션: `client_date date` 컬럼 + 통과분 부분 인덱스(테이블 비어 있어 소급 문제 없음)
+  ②claim 시점에 client_date 저장(재시도 complete가 덮어씀) ③`/stats/me` 응답에
+  `streakStart { date, bookNo, bookName, chapter } | null` — `streakStartDate` 순수 함수(역산) +
+  `StatsRepository.findFirstPassedWriting`(writing_sessions 읽기 — WritingModule↔StatsModule 순환
+  회피로 stats 쪽 배치) + `BooksService.findByBookNo`(null 반환형 내부 API 신설, BooksModule 첫 export).
+  "올해 기록일"은 기존 `/stats/activity` 행 수로 충분 확인. build + jest 51/51.
+- 2026-07-16: **통계/잔디 기획 대조 완료 + 과거 날짜 streak 정책 확정**. 기획 확인: freeze 미구현
+  의도적, 통과만 잔디 반영, 같은 날 중복은 잔디 진하기(모두 현행과 일치). 시차 이동으로 clientDate가
+  lastWrittenDate보다 과거인 경우 **같은 날 취급으로 확정**(streak 유지 + lastWrittenDate 후퇴 금지로
+  이중 적립 봉쇄 — 기존은 리셋이라 시차 사용자가 벌 받는 버그성 동작). `streak-calculator.spec.ts`
+  신설(9케이스, 백로그의 테스트 보강 항목 해소). UTC 잔재 주석·deprecated `.returns()` 정리.
+  build + jest 46/46 통과. 남은 공백: `stats.service` 계층 테스트 없음(lastWrittenDate 후퇴 방지는
+  순수함수 밖 로직이라 미검증).
+- 2026-07-16: **잔디/streak 기준일을 서버 UTC → 클라이언트 로컬 날짜로 변경** ⚠️ 팀원 공유 필요
+  (stats/잔디 흐름은 다른 팀원 작업 영역). ①`POST /writing-sessions/:id/complete` body에 `date`
+  (YYYY-MM-DD) **필수 필드 추가** — 프론트 breaking change, `/verses/today`와 동일 방침.
+  ②`StatsService.recordWriting`에 서버 UTC 대신 이 clientDate가 전달됨(세션 DB엔 저장 안 하고
+  complete→백그라운드 검사로 메모리 전달 — 재시도 시 새 요청이 다시 가져오므로 수명 일치).
+  ③검증은 실존 날짜만(2026-02-31 등 400) — 서버 시간과의 오차 검증은 지금 단계에선 과하다고
+  판단해 **의도적으로 생략**(클라이언트 신고 신뢰, MVP). 부수: `ProgressSnapshot`에 `totalVerses`
+  (진척률 분모) 필드 추가. build + 전체 jest 37/37 통과.
 - 2026-07-15: **실제 구글 OAuth 로그인 활성화** — Supabase 대시보드에 Google provider 등록
   (구글 콘솔에서 OAuth 클라이언트 생성 → Client ID/Secret을 Supabase에 저장, 콜백 URL 교환),
   브라우저 authorize 흐름으로 발급받은 **진짜 토큰이 백엔드 인증 통과 확인**(mock의 provider 강제

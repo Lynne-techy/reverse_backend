@@ -33,6 +33,8 @@ export interface WritingSession {
   recognizedText: string | null;
   similarityScore: number | null;
   passed: boolean | null;
+  /** complete 요청의 클라이언트 로컬 날짜(YYYY-MM-DD). 잔디/streak 기준일. complete 전에는 null. */
+  clientDate: string | null;
   createdAt: string;
   completedAt: string | null;
 }

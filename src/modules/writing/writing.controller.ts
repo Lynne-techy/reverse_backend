@@ -61,6 +61,6 @@ export class WritingController {
     @Param('id') id: string,
     @Body() dto: CompleteWritingSessionDto,
   ): Promise<WritingSession> {
-    return this.writingService.complete(user.userId, id, dto.keyVerseId);
+    return this.writingService.complete(user.userId, id, dto.keyVerseId, dto.date);
   }
 }

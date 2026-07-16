@@ -141,7 +141,19 @@ export class WritingService implements OnApplicationBootstrap {
     userId: string,
     sessionId: string,
     keyVerseId: number,
+    clientDate: string,
   ): Promise<WritingSession> {
+    // clientDate(클라이언트 로컬 날짜)가 잔디/streak의 기록 기준일이 된다.
+    // DTO 정규식은 형식만 보장하므로 2026-02-31처럼 실존하지 않는 날짜를 여기서
+    // 거른다. 값 자체는 클라이언트 신고를 그대로 신뢰한다(MVP 단순화).
+    const parsedDate = new Date(`${clientDate}T00:00:00Z`);
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== clientDate
+    ) {
+      throw new BadRequestException('date가 실존하지 않는 날짜입니다.');
+    }
+
     const session = await this.writingRepository.findById(sessionId);
     if (!session) {
       throw new NotFoundException('필사 세션을 찾을 수 없습니다.');
@@ -178,6 +190,7 @@ export class WritingService implements OnApplicationBootstrap {
     const claimed = await this.writingRepository.claimForProcessing(
       sessionId,
       keyVerseId,
+      clientDate,
       CLAIMABLE_STATUSES,
     );
     if (!claimed) {
@@ -196,7 +209,9 @@ export class WritingService implements OnApplicationBootstrap {
         `유사도 검사 대기열 ${this.similarityLimiter.pending}건 (동시성 상한 도달)`,
       );
     }
-    void this.similarityLimiter.run(() => this.processSimilarity(claimed));
+    void this.similarityLimiter.run(() =>
+      this.processSimilarity(claimed, clientDate),
+    );
 
     return claimed;
   }
@@ -205,7 +220,15 @@ export class WritingService implements OnApplicationBootstrap {
    * 백그라운드 유사도 검사. Storage의 이미지와 필사 범위 원문을 Gemini로 대조해
    * completed(통과/불통과) 또는 failed(검사 자체 실패, 재시도 가능)로 마감한다.
    */
-  private async processSimilarity(session: WritingSession): Promise<void> {
+  /**
+   * @param clientDate 잔디/streak 기준일. claim 시점에 세션의 client_date로도
+   *   저장된다("그날 뭘 필사했는지" 역추적용 — 스트릭 시작 배너 등). 검사 흐름
+   *   자체는 세션을 다시 읽지 않도록 메모리 값을 그대로 쓴다.
+   */
+  private async processSimilarity(
+    session: WritingSession,
+    clientDate: string,
+  ): Promise<void> {
     try {
       const [image, verses] = await Promise.all([
         this.writingRepository.downloadImage(session.objectKey),
@@ -246,10 +269,10 @@ export class WritingService implements OnApplicationBootstrap {
         passed,
       });
 
-      // 통과한 필사만 잔디/streak에 반영한다. 하루 경계는 서버 UTC 기준(MVP 단순화).
+      // 통과한 필사만 잔디/streak에 반영한다. 기준일은 클라이언트 로컬 날짜
+      // (complete 요청의 clientDate) — 사용자가 체감하는 "오늘"에 잔디가 칠해진다.
       if (completed.passed) {
-        const todayUtc = new Date().toISOString().slice(0, 10);
-        await this.statsService.recordWriting(session.userId, todayUtc);
+        await this.statsService.recordWriting(session.userId, clientDate);
       }
     } catch (error) {
       this.logger.error(`유사도 검사 실패: session=${session.id}`, error);

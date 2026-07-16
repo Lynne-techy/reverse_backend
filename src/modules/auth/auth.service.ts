@@ -54,7 +54,22 @@ export class AuthService {
     if (!userId || !email || !provider) {
       throw new UnauthorizedException('토큰에 필요한 사용자 정보가 없습니다.');
     }
-    return { userId, email, provider };
+    return { userId, email, provider, fullName: this.extractFullName(payload) };
+  }
+
+  /**
+   * user_metadata.full_name 추출. 사용자가 수정 가능한 영역이라 인증 판단에는
+   * 쓰지 않고, 최초 프로필 생성 시 표시명 시딩에만 쓴다. 없으면 undefined.
+   */
+  private extractFullName(payload: JWTPayload): string | undefined {
+    const userMetadata = payload.user_metadata;
+    if (typeof userMetadata !== 'object' || userMetadata === null) {
+      return undefined;
+    }
+    const fullName = (userMetadata as Record<string, unknown>).full_name;
+    return typeof fullName === 'string' && fullName.trim() !== ''
+      ? fullName
+      : undefined;
   }
 
   private extractProvider(payload: JWTPayload) {

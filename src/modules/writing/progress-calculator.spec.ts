@@ -12,6 +12,7 @@ describe('calculateProgress', () => {
 
     expect(result).toEqual({
       coveredVerses: 0,
+      totalVerses: 5,
       completedBooks: 0,
       progressRate: 0,
     });
@@ -29,6 +30,7 @@ describe('calculateProgress', () => {
     const result = calculateProgress(ranges, verseTotals);
 
     expect(result.coveredVerses).toBe(2);
+    expect(result.totalVerses).toBe(5);
     expect(result.completedBooks).toBe(0);
     expect(result.progressRate).toBeCloseTo((2 / 5) * 100);
   });
@@ -79,5 +81,6 @@ describe('calculateProgress', () => {
     const result = calculateProgress([], new Map());
 
     expect(result.progressRate).toBe(0);
+    expect(result.totalVerses).toBe(0);
   });
 });

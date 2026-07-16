@@ -25,6 +25,7 @@ interface WritingSessionRow {
   recognized_text: string | null;
   similarity_score: number | null;
   passed: boolean | null;
+  client_date: string | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -45,6 +46,7 @@ function toWritingSession(row: WritingSessionRow): WritingSession {
     recognizedText: row.recognized_text,
     similarityScore: row.similarity_score,
     passed: row.passed,
+    clientDate: row.client_date,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -113,16 +115,23 @@ export class WritingRepository {
   /**
    * 유사도 검사를 위해 세션을 원자적으로 선점한다.
    * `status in (fromStatuses)` 조건이 걸린 update라 동시 요청 중 한쪽만 성공하고,
-   * 나머지는 null을 받는다 (check-then-act 경쟁 방지). key verse도 이 시점에 확정.
+   * 나머지는 null을 받는다 (check-then-act 경쟁 방지). key verse와 client_date
+   * (잔디/streak 기준일)도 이 시점에 확정된다 — 재시도 complete가 새 날짜로
+   * 들어오면 마지막 요청의 값으로 덮어쓴다.
    */
   async claimForProcessing(
     id: string,
     keyVerseId: number,
+    clientDate: string,
     fromStatuses: WritingSessionStatus[],
   ): Promise<WritingSession | null> {
     const { data, error } = await this.supabase
       .from('writing_sessions')
-      .update({ status: 'processing', key_verse_id: keyVerseId })
+      .update({
+        status: 'processing',
+        key_verse_id: keyVerseId,
+        client_date: clientDate,
+      })
       .eq('id', id)
       .in('status', fromStatuses)
       .select('*')
