@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>reverse-growthlog · 인프라 &amp; 배포 구성도</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e141a;
+    --panel:#151d26;
+    --panel-2:#1b2530;
+    --line:#2a3844;
+    --line-soft:#22303b;
+    --ink:#e7eef5;
+    --ink-mid:#a9b8c6;
+    --ink-dim:#6d7f8f;
+    --serve:#43c6e6;      /* 요청/서빙 경로 */
+    --serve-dim:#1d5566;
+    --deploy:#b58cf0;     /* 배포 경로 */
+    --deploy-dim:#4a3a6b;
+    --alert:#ff6b6b;      /* 삭제/차단 */
+    --ok:#5fd39a;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:"Space Grotesk",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--disp);line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(circle at 15% 0%, #17222c 0%, transparent 45%),
+      radial-gradient(circle at 90% 10%, #16202a 0%, transparent 40%);
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px 90px}
+  code,.mono{font-family:var(--mono)}
+
+  /* ---------- header ---------- */
+  header{padding:52px 0 30px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--serve);margin:0 0 14px}
+  h1{font-size:clamp(30px,5vw,50px);font-weight:700;letter-spacing:-.02em;
+    margin:0 0 6px;line-height:1.05}
+  h1 .dim{color:var(--ink-dim);font-weight:500}
+  .sub{color:var(--ink-mid);font-size:15px;max-width:640px;margin:14px 0 0}
+  .statusbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:7px 12px;
+    border:1px solid var(--line);border-radius:6px;background:var(--panel);
+    color:var(--ink-mid);display:flex;align-items:center;gap:8px}
+  .chip b{color:var(--ink);font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);
+    box-shadow:0 0 0 3px rgba(95,211,154,.15)}
+
+  /* ---------- section ---------- */
+  section{padding:52px 0 8px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{font-family:var(--mono);font-size:13px;color:var(--ink-dim)}
+  h2{font-size:clamp(21px,3vw,27px);font-weight:600;letter-spacing:-.01em;margin:0}
+  .sec-desc{color:var(--ink-mid);font-size:14px;margin:0 0 30px;max-width:680px}
+
+  /* ---------- legend ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:20px;padding:14px 18px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:8px;font-family:var(--mono);font-size:12.5px}
+  .legend .li{display:flex;align-items:center;gap:9px;color:var(--ink-mid)}
+  .swatch{width:22px;height:3px;border-radius:2px}
+  .swatch.serve{background:var(--serve)}
+  .swatch.deploy{background:var(--deploy)}
+  .swatch.course{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);background:var(--panel-2)}
+
+  /* ---------- runtime stack ---------- */
+  .stack{display:flex;flex-direction:column;align-items:stretch;gap:0}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;position:relative}
+  .node .role{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-dim);margin-bottom:7px}
+  .node .name{font-size:17px;font-weight:600;display:flex;align-items:center;
+    gap:10px;flex-wrap:wrap}
+  .node .name .tag{font-family:var(--mono);font-size:11px;font-weight:500;
+    color:var(--serve);border:1px solid var(--serve-dim);border-radius:5px;
+    padding:2px 7px;letter-spacing:.02em}
+  .node p{margin:9px 0 0;color:var(--ink-mid);font-size:13.5px}
+  .node .meta{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-top:9px}
+
+  .node.serve{border-left:3px solid var(--serve)}
+  .connector{height:30px;width:2px;background:linear-gradient(var(--serve),var(--serve-dim));
+    margin:0 auto;position:relative}
+  .connector::after{content:"";position:absolute;bottom:-1px;left:50%;
+    transform:translateX(-50%);border-left:5px solid transparent;
+    border-right:5px solid transparent;border-top:7px solid var(--serve-dim)}
+  .connector .lbl{position:absolute;left:14px;top:50%;transform:translateY(-50%);
+    font-family:var(--mono);font-size:11px;color:var(--ink-dim);white-space:nowrap}
+
+  /* VM = convergence node */
+  .vm{border:1px solid var(--line);border-radius:14px;padding:16px;
+    background:linear-gradient(180deg,#16202b,#141c25);
+    border-left:3px solid var(--serve);border-right:3px solid var(--deploy)}
+  .vm-head{display:flex;justify-content:space-between;align-items:flex-start;
+    gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:2px 4px}
+  .vm-head .role{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-dim)}
+  .vm-head .name{font-size:18px;font-weight:600}
+  .vm-head .spec{font-family:var(--mono);font-size:12px;color:var(--ink-dim);text-align:right}
+  .containers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .ctr{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px}
+  .ctr .cname{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink);
+    display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .ctr .cname .pill{font-size:10.5px;font-weight:500;color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:20px;padding:1px 8px}
+  .ctr ul{margin:0;padding-left:16px;color:var(--ink-mid);font-size:12.5px}
+  .ctr li{margin:3px 0}
+  .compose-note{font-family:var(--mono);font-size:11px;color:var(--ink-dim);
+    text-align:center;margin-top:12px}
+
+  /* external services row */
+  .ext-fan{height:26px;position:relative;margin:2px 0 0}
+  .ext-fan::before{content:"";position:absolute;top:0;left:25%;right:25%;height:2px;
+    background:var(--serve-dim)}
+  .externals{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:0}
+  .ext{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:14px 15px;border-top:2px solid var(--serve-dim)}
+  .ext .en{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ext .en .tag{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--serve);
+    border:1px solid var(--serve-dim);border-radius:5px;padding:1px 6px}
+  .ext p{margin:8px 0 0;font-size:12.5px;color:var(--ink-mid)}
+
+  /* ---------- data flow strip ---------- */
+  .flow{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin-top:6px;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+  .step{padding:16px 15px;border-right:1px solid var(--line-soft);position:relative}
+  .step:last-child{border-right:none}
+  .step .n{font-family:var(--mono);font-size:12px;color:var(--serve);font-weight:600}
+  .step .t{font-size:13px;font-weight:600;margin:6px 0 4px}
+  .step .d{font-size:11.5px;color:var(--ink-dim);line-height:1.4}
+  .step .d code{font-size:11px;color:var(--serve)}
+
+  /* ---------- CI/CD pipeline ---------- */
+  .pipe{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;
+    gap:0;margin-top:6px}
+  .pnode{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:17px 18px;border-top:3px solid var(--deploy)}
+  .pnode .role{font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-dim);margin-bottom:7px}
+  .pnode .name{font-size:15.5px;font-weight:600;line-height:1.25}
+  .pnode .name .tag{display:inline-block;font-family:var(--mono);font-size:10.5px;
+    font-weight:500;color:var(--deploy);border:1px solid var(--deploy-dim);border-radius:5px;
+    padding:1px 6px;margin-left:6px;vertical-align:middle}
+  .pnode p{margin:9px 0 0;font-size:12.5px;color:var(--ink-mid)}
+  .pnode .meta{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-top:8px;
+    word-break:break-all}
+  .arrow{display:flex;align-items:center;justify-content:center;padding:0 8px;color:var(--deploy)}
+  .arrow svg{width:26px;height:26px}
+  .jobs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .job{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 16px;
+    border-left:3px solid var(--deploy)}
+  .job h4{margin:0 0 6px;font-size:14px;font-family:var(--mono);color:var(--ink)}
+  .job ol{margin:0;padding-left:17px;color:var(--ink-mid);font-size:12.5px}
+  .job li{margin:4px 0}
+  .job code{font-size:11.5px;color:var(--deploy)}
+
+  /* ---------- security ---------- */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+  .card h3{margin:0 0 4px;font-size:16px;font-weight:600}
+  .card .cd{font-size:12.5px;color:var(--ink-dim);margin:0 0 14px}
+  .kv{font-family:var(--mono);font-size:12.5px;display:flex;flex-direction:column;gap:9px}
+  .kv .row{display:flex;justify-content:space-between;gap:12px;
+    padding-bottom:9px;border-bottom:1px dashed var(--line-soft)}
+  .kv .row:last-child{border-bottom:none;padding-bottom:0}
+  .kv .k{color:var(--ink-mid)}
+  .kv .v{color:var(--ink);text-align:right}
+  .kv .v.ok{color:var(--ok)}
+  .kv .v.gone{color:var(--alert);text-decoration:line-through;text-decoration-color:var(--alert)}
+  .badge-list{display:flex;flex-direction:column;gap:11px;margin-top:2px}
+  .bl{display:flex;gap:11px;align-items:flex-start;font-size:13px;color:var(--ink-mid)}
+  .bl .ic{flex:none;width:20px;height:20px;border-radius:5px;display:grid;place-items:center;
+    font-family:var(--mono);font-size:12px;font-weight:700;margin-top:1px}
+  .bl .ic.on{background:rgba(95,211,154,.12);color:var(--ok);border:1px solid rgba(95,211,154,.3)}
+  .bl .ic.off{background:rgba(255,107,107,.1);color:var(--alert);border:1px solid rgba(255,107,107,.3)}
+  .bl b{color:var(--ink);font-weight:600}
+
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line-soft)}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:500}
+  td{color:var(--ink-mid)}
+  td.mono{font-family:var(--mono);font-size:12px;color:var(--ink)}
+  td b{color:var(--ink);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  .tbl-wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .course-cell{font-family:var(--mono);font-size:11px;color:var(--deploy)}
+
+  /* ---------- course legend footer ---------- */
+  .courses{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .cc{font-family:var(--mono);font-size:11.5px;padding:6px 11px;border-radius:6px;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink-mid)}
+  .cc b{color:var(--ink)}
+
+  /* ---------- decision evolution ---------- */
+  .evo{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;align-items:stretch;position:relative}
+  .evo-stage{background:var(--panel);border:1px solid var(--line);padding:18px 18px 20px;position:relative}
+  .evo-stage:first-child{border-radius:12px 0 0 12px}
+  .evo-stage:last-child{border-radius:0 12px 12px 0;border-left:none}
+  .evo-stage:nth-child(2){border-left:none}
+  .evo-stage .ver{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .evo-stage .ver .v{color:var(--ink-dim)}
+  .evo-stage .state{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.12em;
+    padding:2px 7px;border-radius:4px}
+  .evo-stage .impl{font-size:15px;font-weight:600;line-height:1.25;margin-bottom:4px}
+  .evo-stage .adr{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-bottom:11px}
+  .evo-stage .why{font-size:12.5px;color:var(--ink-mid);border-top:1px dashed var(--line-soft);
+    padding-top:11px}
+  .evo-stage .why b{color:var(--ink)}
+  .evo-stage .ctrs{font-family:var(--mono);font-size:11px;margin-top:11px;color:var(--ink-dim)}
+  .evo-stage .ctrs b{color:var(--serve)}
+
+  .evo-stage.dead{background:var(--bg);opacity:.82}
+  .evo-stage.dead .impl{color:var(--ink-mid);text-decoration:line-through;
+    text-decoration-color:var(--ink-dim);text-decoration-thickness:1px}
+  .evo-stage.dead .state{background:rgba(255,107,107,.1);color:var(--alert);
+    border:1px solid rgba(255,107,107,.28)}
+  .evo-stage.live{border:1px solid var(--serve-dim);border-top:3px solid var(--serve);
+    box-shadow:0 0 0 1px var(--serve-dim)}
+  .evo-stage.live .state{background:rgba(95,211,154,.12);color:var(--ok);
+    border:1px solid rgba(95,211,154,.3)}
+
+  .evo-arrow{position:absolute;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);
+    background:var(--bg);border:1px solid var(--line);border-radius:50%;display:grid;
+    place-items:center;color:var(--alert);z-index:3}
+  .evo-arrow svg{width:14px;height:14px}
+  .evo-arrow.a1{left:33.33%}.evo-arrow.a2{left:66.66%}
+
+  .seam{margin-top:14px;background:linear-gradient(90deg,var(--deploy-dim),transparent 90%);
+    border:1px solid var(--deploy-dim);border-left:3px solid var(--deploy);border-radius:10px;
+    padding:14px 18px}
+  .seam .st{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--deploy);margin-bottom:5px}
+  .seam .sd{font-size:13px;color:var(--ink-mid)}
+  .seam .sd b{color:var(--ink)}
+
+  .future{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px;
+    font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
+  .future .flabel{color:var(--ink-mid)}
+  .future .fopt{border:1px dashed var(--deploy-dim);border-radius:6px;padding:5px 10px;
+    color:var(--ink-mid)}
+  .future .fopt b{color:var(--deploy)}
+  .future .far{color:var(--deploy)}
+
+  @media(max-width:760px){
+    .evo{grid-template-columns:1fr}
+    .evo-stage{border-radius:0!important;border-left:1px solid var(--line)!important;
+      border-top:none}
+    .evo-stage:first-child{border-radius:12px 12px 0 0!important;border-top:1px solid var(--line)}
+    .evo-stage:last-child{border-radius:0 0 12px 12px!important}
+    .evo-stage.live{border-top:1px solid var(--serve-dim)}
+    .evo-arrow{display:none}
+  }
+
+  footer{margin-top:60px;padding-top:26px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--ink-dim);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+  @media(max-width:760px){
+    .containers{grid-template-columns:1fr}
+    .externals{grid-template-columns:1fr}
+    .ext-fan{display:none}
+    .flow{grid-template-columns:1fr 1fr}
+    .step{border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+    .pipe{grid-template-columns:1fr}
+    .arrow{transform:rotate(90deg);padding:6px 0}
+    .jobs,.grid2{grid-template-columns:1fr}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .node,.pnode,.ext,.card,.job{animation:rise .5s ease both}
+    @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Infrastructure &amp; Delivery Map</p>
+    <h1>reverse-growthlog<span class="dim"> / 인프라 구성도</span></h1>
+    <p class="sub">필사 습관 트래커의 프로덕션 인프라와 배포 파이프라인. 요청이 사용자에게 닿는 <span style="color:var(--serve)">서빙 경로</span>와 코드가 라이브에 반영되는 <span style="color:var(--deploy)">배포 경로</span>를 색으로 분리했다. 두 회로가 만나는 지점은 단 하나 — GCE VM.</p>
+    <div class="statusbar">
+      <span class="chip"><span class="dot"></span><b>LIVE</b> reverse-growthlog.com</span>
+      <span class="chip">region <b>asia-northeast3 · Seoul</b></span>
+      <span class="chip">project <b>reverse-502210</b></span>
+      <span class="chip">TLS <b>Full (strict)</b> · Origin CA → 2041</span>
+    </div>
+  </header>
+
+  <div class="legend" style="margin-top:34px">
+    <span class="li"><span class="swatch serve"></span> 서빙 경로 (요청 → 응답)</span>
+    <span class="li"><span class="swatch deploy"></span> 배포 경로 (commit → 라이브)</span>
+    <span class="li"><span class="swatch course"></span> 대응 커리큘럼 과목</span>
+  </div>
+
+  <!-- ============ 1. RUNTIME ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>런타임 아키텍처 — 요청 경로</h2></div>
+    <p class="sec-desc">사용자 요청은 Cloudflare에서 IP가 은닉·검사된 뒤 VM의 nginx로 들어와 정적 자산은 직접 서빙되고 <code style="font-family:var(--mono);color:var(--serve)">/api/**</code>만 NestJS로 프록시된다. 동일 오리진이라 CORS가 원천 제거된다.</p>
+
+    <div class="stack">
+      <div class="node serve">
+        <div class="role">Client</div>
+        <div class="name">사용자 브라우저 <span class="tag">HTML웹프로그래밍</span></div>
+        <p>React SPA. 업로드 전 이미지를 클라이언트에서 리사이즈·WebP 압축(장당 150–300KB)해 대역폭 부담을 줄인다.</p>
+      </div>
+
+      <div class="connector"><span class="lbl">HTTPS</span></div>
+
+      <div class="node serve">
+        <div class="role">Edge · DNS · WAF</div>
+        <div class="name">Cloudflare <span class="tag">정보통신망</span> <span class="tag">컴퓨터보안</span></div>
+        <p>프록시 ON(주황 구름) — 오리진 IP 은닉, DDoS 방어, WAF, 정적 자산 엣지 캐싱. SSL 모드 Full(strict)로 엣지↔오리진 구간까지 암호화.</p>
+        <div class="meta">A record → 고정 IP · Origin CA 인증서(15년) 검증</div>
+      </div>
+
+      <div class="connector"><span class="lbl">Full(strict) · Origin CA</span></div>
+
+      <div class="vm">
+        <div class="vm-head">
+          <div>
+            <div class="role">Compute · IaaS</div>
+            <div class="name">GCE VM · <span class="mono">reverse-vm</span></div>
+          </div>
+          <div class="spec">e2-small · 2 vCPU / 2GB<br>Ubuntu 24.04 · swap 2GB · 고정 IP</div>
+        </div>
+
+        <div class="containers">
+          <div class="ctr" style="border-left:2px solid var(--serve)">
+            <div class="cname">web (nginx) <span class="pill">256MB · :80/:443</span></div>
+            <ul>
+              <li>TLS 종단 (Origin CA)</li>
+              <li>React 정적 빌드 서빙</li>
+              <li><code style="font-family:var(--mono)">/api/**</code> → api 프록시</li>
+            </ul>
+          </div>
+          <div class="ctr" style="border-left:2px solid var(--serve)">
+            <div class="cname">api (NestJS) <span class="pill">1GB · :3000</span></div>
+            <ul>
+              <li>무상태 요청 처리 (JWT/DB)</li>
+              <li>인프로세스 백그라운드 잡</li>
+              <li>원자적 클레임 + 동시성 캡 3</li>
+            </ul>
+          </div>
+        </div>
+        <div class="compose-note">Docker Compose · network “re-verse” · restart: unless-stopped · <span style="color:var(--deploy)">운영체제</span> (namespace/cgroup 격리, 메모리 제한)</div>
+      </div>
+
+      <div class="ext-fan"></div>
+      <div class="externals">
+        <div class="ext">
+          <div class="en">Supabase <span class="tag">데이터베이스시스템</span></div>
+          <p>Postgres + Auth (서울). 풀러 6543. 원자적 잡 클레임의 실제 트랜잭션·동시성 제어가 여기서 일어난다.</p>
+        </div>
+        <div class="ext">
+          <div class="en">Supabase Storage <span class="tag">컴퓨터보안</span></div>
+          <p>presigned URL로 클라이언트가 직접 업로드 — 이미지가 VM을 경유하지 않음. 현재 Supabase Storage(Private 버킷), R2 전환 예정.</p>
+        </div>
+        <div class="ext">
+          <div class="en">Gemini API <span class="tag">인공지능</span></div>
+          <p>gemini-2.5-flash. 백그라운드 잡에서만 호출해 한·영 손글씨 인식 + 원문 대조. 동시 호출 상한 3.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. DATA FLOW ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>비동기 인증 흐름</h2></div>
+    <p class="sec-desc">Gemini 호출이 수 초 걸리므로 요청 스레드를 붙잡지 않는다. 세션 상태 컬럼이 곧 잡 상태이며(<code style="font-family:var(--mono);color:var(--serve)">pending→processing→completed/failed</code>), 완료 요청 핸들러가 원자적으로 클레임한 뒤 인프로세스 백그라운드 잡을 띄운다(폴링 스케줄러 없음). 조건부 update라 동시 요청이 겹쳐도 정확히 하나만 처리한다.</p>
+    <div class="flow">
+      <div class="step"><div class="n">01</div><div class="t">직접 업로드</div><div class="d">클라이언트가 <code>presigned URL</code>로 스토리지에 이미지 업로드</div></div>
+      <div class="step"><div class="n">02</div><div class="t">세션 생성</div><div class="d">NestJS가 <code>status=pending</code>으로 세션 기록 후 응답</div></div>
+      <div class="step"><div class="n">03</div><div class="t">원자적 클레임</div><div class="d">완료 요청이 <code>update … where status in('pending','uploaded','failed')</code> — 한 요청만 선점</div></div>
+      <div class="step"><div class="n">04</div><div class="t">인식·대조</div><div class="d">Supabase Storage에서 로드 → Gemini로 손글씨 인식 + 유사도 판정</div></div>
+      <div class="step"><div class="n">05</div><div class="t">결과 기록</div><div class="d"><code>completed</code> / <code>failed</code> 로 상태 전이</div></div>
+      <div class="step"><div class="n">06</div><div class="t">갱신 통지</div><div class="d">클라이언트가 <code>GET :id</code> 폴링으로 결과 수신</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 3. CI/CD ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>배포 파이프라인 — 레지스트리 빌드</h2></div>
+    <p class="sec-desc">2GB VM에서 직접 빌드하면 tsc·vite가 실행 중 컨테이너를 OOM으로 죽일 수 있어, 빌드 부하를 러너로 오프로드했다. VM이 하는 일은 완성된 이미지를 pull하는 것뿐 — 빌드 부하 0.</p>
+
+    <div class="pipe">
+      <div class="pnode">
+        <div class="role">Trigger</div>
+        <div class="name">GitHub Actions <span class="tag">소프트웨어공학</span></div>
+        <p>백엔드 레포에서 실행. 매일 19:00 UTC(04:00 KST) + 수동 dispatch.</p>
+        <div class="meta">repo: Lynne-techy/reverse_backend</div>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M14 6l6 6-6 6"/></svg></div>
+      <div class="pnode">
+        <div class="role">Build · Push</div>
+        <div class="name">Artifact Registry <span class="tag">클라우드컴퓨팅</span></div>
+        <p>두 레포 체크아웃 → api·web 이미지 빌드 → 서울 레지스트리로 <code>:sha</code> + <code>:latest</code> push.</p>
+        <div class="meta">asia-northeast3-docker.pkg.dev/reverse-502210/reverse</div>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M14 6l6 6-6 6"/></svg></div>
+      <div class="pnode">
+        <div class="role">Deploy · Live</div>
+        <div class="name">GCE VM <span class="tag">UNIX시스템</span></div>
+        <p>IAP 터널로 접속 → 설정만 <code>git pull</code> → <code>docker compose pull</code> → <code>up -d</code>. 같은 리전 pull은 egress 무료.</p>
+        <div class="meta">rollback: :sha 태그로 특정 버전 복귀</div>
+      </div>
+    </div>
+
+    <div class="jobs">
+      <div class="job">
+        <h4>job · build-push (runner)</h4>
+        <ol>
+          <li>backend + frontend 레포 체크아웃</li>
+          <li>WIF로 GCP 인증 (키리스)</li>
+          <li>api·web 이미지 빌드 → <code>:sha</code>/<code>:latest</code></li>
+          <li>Artifact Registry(서울) push</li>
+        </ol>
+      </div>
+      <div class="job">
+        <h4>job · deploy (VM)</h4>
+        <ol>
+          <li>IAP 터널로 VM SSH</li>
+          <li>compose·nginx 설정만 <code>git pull</code></li>
+          <li>VM 메타데이터 토큰으로 AR 로그인</li>
+          <li><code>compose pull</code> → <code>up -d</code> → 200 확인</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. SECURITY ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>접근 제어 &amp; IAM 태세</h2></div>
+    <p class="sec-desc">장기 비밀키를 어디에도 저장하지 않는다. CI는 WIF 단기 토큰으로 인증하고, SSH 22번은 인터넷에서 완전히 제거돼 IAP 신원 기반으로만 열린다.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>키리스 인증 &amp; 터널</h3>
+        <p class="cd">GitHub Secrets에 개인키 없음 — 참조값 2개뿐</p>
+        <div class="badge-list">
+          <div class="bl"><span class="ic on">✓</span><div><b>Workload Identity Federation</b> — GitHub OIDC → SA 임시 토큰 교환. 레포 조건으로 principalSet 제한.</div></div>
+          <div class="bl"><span class="ic on">✓</span><div><b>IAP TCP 터널</b> — SSH가 IAP 대역 <span class="mono">35.235.240.0/20</span>으로만 허용. 인터넷 노출 0.</div></div>
+          <div class="bl"><span class="ic off">✕</span><div><b>default-allow-ssh</b> (0.0.0.0/0) 삭제 — 전세계 22번 개방 규칙 제거</div></div>
+          <div class="bl"><span class="ic off">✕</span><div><b>default-allow-rdp</b> (3389) 삭제</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>서비스 계정 · 최소 권한</h3>
+        <p class="cd">deploy SA와 VM compute SA의 역할 분리</p>
+        <div class="kv">
+          <div class="row"><span class="k">deploy SA</span><span class="v">iap.tunnelResourceAccessor</span></div>
+          <div class="row"><span class="k"></span><span class="v">compute.instanceAdmin.v1</span></div>
+          <div class="row"><span class="k"></span><span class="v">iam.serviceAccountUser</span></div>
+          <div class="row"><span class="k"></span><span class="v">artifactregistry.writer</span></div>
+          <div class="row"><span class="k">VM compute SA</span><span class="v ok">AR 저장소: artifactregistry.reader</span></div>
+          <div class="row"><span class="k"></span><span class="v ok">프로젝트: logWriter · metricWriter · resourceMetadata.writer</span></div>
+          <div class="row"><span class="k"></span><span class="v gone">roles/editor (기본값 → 제거됨)</span></div>
+          <div class="row"><span class="k">SSH 22 노출</span><span class="v gone">0.0.0.0/0</span></div>
+          <div class="row"><span class="k">헬스체크</span><span class="v ok">/api/health/db · 09:00 KST</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. DECISION EVOLUTION ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>설계 변천 — 큐 의사결정 3단</h2></div>
+    <p class="sec-desc">현재 구조는 처음부터 이렇지 않았다. 큐 처리 방식을 세 번 바꿨고, 매번 <b style="color:var(--ink)">전제가 무너져 구현 전에 이전 결정을 폐기</b>했다(v1·v2는 ADR 단계에서 superseded — 코드로 짜지 않았다). 그래서 비동기 처리를 갈아끼울 지점을 <code style="font-family:var(--mono);color:var(--deploy)">QueueService</code>라는 교체 경계(seam)로 문서에 명시해 둔 게 논거다. 넣은 것보다 <b style="color:var(--ink)">뺀 것</b>을 설명할 수 있다는 게 이 프로젝트의 논거다.</p>
+
+    <div class="evo">
+      <div class="evo-stage dead">
+        <div class="ver"><span class="v">v1</span><span class="state">SUPERSEDED</span></div>
+        <div class="impl">Cloud Tasks</div>
+        <div class="adr">ADR 6.2 · 관리형 푸시 큐</div>
+        <div class="why"><b>채택 이유:</b> Cloud Run 서버리스는 폴링 워커가 불가 → 푸시 방식 큐가 필요.</div>
+        <div class="ctrs">컨테이너 <b>—</b> (서버리스)</div>
+      </div>
+
+      <div class="evo-stage dead">
+        <div class="ver"><span class="v">v2</span><span class="state">SUPERSEDED</span></div>
+        <div class="impl">Redis + BullMQ</div>
+        <div class="adr">ADR 6.8 · 자체 운영 큐</div>
+        <div class="why"><b>폐기 계기:</b> VM 상시 가동으로 폴링 제약 소멸 → 서버리스 전제가 사라짐. “큐 직접 운영” 가치로 재선택.</div>
+        <div class="ctrs">컨테이너 <b>4</b> (nginx/api/redis/worker)</div>
+      </div>
+
+      <div class="evo-stage live">
+        <div class="ver"><span class="v">v2.1</span><span class="state">LIVE</span></div>
+        <div class="impl">인프로세스 + DB 상태 머신</div>
+        <div class="adr">ADR 6.11 · 현재 구성</div>
+        <div class="why"><b>폐기 계기:</b> 유사도 검사를 Gemini 직접 호출로 확정(6.3) → <b>워커 프로세스의 존재 이유 자체가 소멸.</b> 세션 status가 곧 잡 상태.</div>
+        <div class="ctrs">컨테이너 <b>2</b> (nginx/api) · 2GB 여유↑</div>
+      </div>
+
+      <div class="evo-arrow a1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="evo-arrow a2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+    </div>
+
+    <div class="seam">
+      <div class="st">명시된 교체 경계 · 의존성 역전</div>
+      <div class="sd">v1·v2는 <b>구현 전 폐기</b>됐고, 현재 코드엔 <code style="font-family:var(--mono);color:var(--deploy)">QueueService</code> 타입 대신 <code style="font-family:var(--mono)">HandwritingCheckService</code> + <code style="font-family:var(--mono)">ConcurrencyLimiter</code> + <code style="font-family:var(--mono)">writing_sessions</code> 상태 전이가 그 자리를 채운다. 재확장이 필요하면 이 경계로 큐를 다시 끼운다 — 규모 적합성(YAGNI)의 실증이다.</div>
+    </div>
+
+    <div class="future">
+      <span class="flabel">재확장 경로 (요구 발생 시)</span>
+      <span class="far">→</span>
+      <span class="fopt"><b>pg-boss</b> · 추가 인프라 0</span>
+      <span class="far">→</span>
+      <span class="fopt"><b>Redis + BullMQ</b> · 워커 분리</span>
+      <span class="far">→</span>
+      <span class="fopt"><b>Cloud Tasks</b> · 서버리스 회귀</span>
+    </div>
+  </section>
+
+  <!-- ============ 6. STACK TABLE ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>스택 &amp; 운영 요약</h2></div>
+    <p class="sec-desc">각 구성요소와 대응 커리큘럼 과목. 심사 설명은 기술 나열이 아니라 과목 용어로 시스템을 설명한다는 원칙을 따른다.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>레이어</th><th>구성</th><th>세부</th><th>대응 과목</th></tr></thead>
+        <tbody>
+          <tr><td><b>서버</b></td><td class="mono">GCE e2-small</td><td>서울 · Ubuntu 24.04 · 2GB · 스왑 2GB</td><td class="course-cell">UNIX · 클라우드 · OS</td></tr>
+          <tr><td><b>컨테이너</b></td><td class="mono">Docker Compose</td><td>nginx / nestjs 2컨테이너 · 메모리 제한</td><td class="course-cell">운영체제</td></tr>
+          <tr><td><b>프록시</b></td><td class="mono">nginx</td><td>TLS 종단 + 정적 서빙 + /api 프록시</td><td class="course-cell">정보통신망</td></tr>
+          <tr><td><b>엣지</b></td><td class="mono">Cloudflare</td><td>DNS · 프록시 ON · Full(strict) · WAF</td><td class="course-cell">정보통신망 · 보안</td></tr>
+          <tr><td><b>DB/Auth</b></td><td class="mono">Supabase</td><td>Postgres 서울 · 원자적 잡 클레임</td><td class="course-cell">데이터베이스시스템</td></tr>
+          <tr><td><b>OCR</b></td><td class="mono">Gemini 2.5-flash</td><td>백그라운드 잡 · 동시성 캡 3</td><td class="course-cell">인공지능/ML</td></tr>
+          <tr><td><b>CI/CD</b></td><td class="mono">Actions → AR</td><td>WIF 키리스 · IAP 배포 · :sha 롤백</td><td class="course-cell">소프트웨어공학 · 보안</td></tr>
+          <tr><td><b>모니터링</b></td><td class="mono">Ops Agent</td><td>Cloud Monitoring · 주간 스냅샷</td><td class="course-cell">UNIX시스템</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="courses">
+      <span class="cc"><b>UNIX시스템</b> · VM 운영 · cron · systemd</span>
+      <span class="cc"><b>정보통신망</b> · DNS → 프록시 → 앱 계층</span>
+      <span class="cc"><b>컴퓨터보안</b> · TLS · IAP · WIF · 최소권한</span>
+      <span class="cc"><b>운영체제</b> · 컨테이너 격리 · 메모리 제한</span>
+      <span class="cc"><b>클라우드컴퓨팅</b> · IaaS 선택 · IAM</span>
+      <span class="cc"><b>데이터베이스시스템</b> · 트랜잭션 · 동시성 제어</span>
+      <span class="cc"><b>소프트웨어공학</b> · ADR · CI/CD · 인터페이스 추상화</span>
+    </div>
+  </section>
+
+  <footer>
+    <span>reverse-growthlog · 인프라 &amp; 배포 구성도</span>
+    <span>project reverse-502210 · asia-northeast3 · 2026-07</span>
+  </footer>
+
+</div>
+</body>
+</html>

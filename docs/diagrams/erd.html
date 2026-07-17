@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>reverse-growthlog · 데이터 모델 ERD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e141a; --panel:#151d26; --panel-2:#1b2530;
+    --line:#2a3844; --line-soft:#22303b;
+    --ink:#e7eef5; --ink-mid:#a9b8c6; --ink-dim:#6d7f8f;
+    --identity:#43c6e6; --identity-dim:#1d5566;
+    --content:#b58cf0;  --content-dim:#4a3a6b;
+    --activity:#e8b04b; --activity-dim:#5c471d;
+    --alert:#ff6b6b; --ok:#5fd39a;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:"Space Grotesk",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--disp);line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(circle at 12% 0%,#17222c 0,transparent 45%),
+      radial-gradient(circle at 92% 8%,#16202a 0,transparent 42%);}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 90px}
+  code{font-family:var(--mono)}
+
+  header{padding:52px 0 28px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--activity);margin:0 0 14px}
+  h1{font-size:clamp(30px,5vw,50px);font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.05}
+  h1 .dim{color:var(--ink-dim);font-weight:500}
+  .sub{color:var(--ink-mid);font-size:15px;max-width:660px;margin:14px 0 0}
+  .stat{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:7px 12px;border:1px solid var(--line);
+    border-radius:6px;background:var(--panel);color:var(--ink-mid)}
+  .chip b{color:var(--ink)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:22px;padding:14px 18px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;margin:30px 0 8px;font-family:var(--mono);font-size:12.5px}
+  .legend .li{display:flex;align-items:center;gap:9px;color:var(--ink-mid)}
+  .dom{width:12px;height:12px;border-radius:3px}
+  .dom.identity{background:var(--identity)}.dom.content{background:var(--content)}.dom.activity{background:var(--activity)}
+  .kbadge{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.04em}
+  .kbadge.pk{background:rgba(232,176,75,.14);color:var(--activity);border:1px solid var(--activity-dim)}
+  .kbadge.fk{background:rgba(67,198,230,.12);color:var(--identity);border:1px solid var(--identity-dim)}
+
+  .hint{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin:14px 0 6px;display:none}
+
+  /* ERD canvas */
+  .erd-scroll{overflow-x:auto;padding:6px 2px 10px;margin:0 -2px}
+  #erd{position:relative;min-width:940px;display:flex;gap:70px;align-items:flex-start;padding:8px 6px 30px}
+  .erd-col{display:flex;flex-direction:column;gap:34px;flex:1;position:relative;z-index:2}
+  svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+
+  .entity{background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+    box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  .e-head{padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;
+    border-bottom:1px solid var(--line)}
+  .e-head .en{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+  .e-head .kr{font-size:11px;color:var(--ink-dim);font-weight:500}
+  .entity.identity .e-head{background:linear-gradient(90deg,rgba(67,198,230,.13),transparent);border-bottom-color:var(--identity-dim)}
+  .entity.identity{border-top:2px solid var(--identity)}
+  .entity.content .e-head{background:linear-gradient(90deg,rgba(181,140,240,.13),transparent);border-bottom-color:var(--content-dim)}
+  .entity.content{border-top:2px solid var(--content)}
+  .entity.activity .e-head{background:linear-gradient(90deg,rgba(232,176,75,.13),transparent);border-bottom-color:var(--activity-dim)}
+  .entity.activity{border-top:2px solid var(--activity)}
+  .entity.external{opacity:.9;border-style:dashed}
+  .entity.external .e-head .en{color:var(--ink-mid)}
+
+  .col-row{display:flex;align-items:center;gap:8px;padding:5px 14px;font-family:var(--mono);font-size:11.5px;
+    border-bottom:1px solid var(--line-soft)}
+  .col-row:last-child{border-bottom:none}
+  .col-row .cn{color:var(--ink);flex:1;white-space:nowrap}
+  .col-row .ct{color:var(--ink-dim);font-size:10.5px}
+  .col-row.key .cn{font-weight:600}
+  .col-row .mk{display:flex;gap:4px;flex:none}
+  .col-row.state{background:rgba(232,176,75,.06)}
+  .col-row.state .cn{color:var(--activity)}
+  .col-row .stag{font-size:9px;color:var(--activity);border:1px solid var(--activity-dim);
+    border-radius:4px;padding:0 5px;letter-spacing:.04em}
+  .col-more{padding:6px 14px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}
+
+  /* notes */
+  section{padding:52px 0 8px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{font-family:var(--mono);font-size:13px;color:var(--ink-dim)}
+  h2{font-size:clamp(21px,3vw,27px);font-weight:600;margin:0}
+  .sec-desc{color:var(--ink-mid);font-size:14px;margin:0 0 26px;max-width:700px}
+  .notes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .note{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:17px 18px;
+    border-left:3px solid var(--activity)}
+  .note h3{margin:0 0 7px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .note h3 .tag{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--content);
+    border:1px solid var(--content-dim);border-radius:4px;padding:1px 6px}
+  .note p{margin:0;font-size:12.8px;color:var(--ink-mid)}
+  .note p code{font-size:11.5px;color:var(--activity)}
+  .note.implicit{border-left-color:var(--ink-dim)}
+  .note.implicit h3 .tag{color:var(--ink-dim);border-color:var(--line)}
+
+  footer{margin-top:56px;padding-top:24px;border-top:1px solid var(--line);font-family:var(--mono);
+    font-size:12px;color:var(--ink-dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+  @media(max-width:900px){ .hint{display:block} .notes{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Entity Relationship Diagram</p>
+    <h1>데이터 모델<span class="dim"> / reverse-growthlog</span></h1>
+    <p class="sub">Supabase(Postgres) 스키마. 신원(<span style="color:var(--identity)">users</span>)을 허브로, 필사 활동(<span style="color:var(--activity)">writing_sessions</span>)을 트랜잭션 중심으로 둔다. <code style="color:var(--activity)">status</code> 컬럼이 곧 잡 상태 머신이며, 원자적 클레임의 대상이다.</p>
+    <div class="stat">
+      <span class="chip">엔티티 <b>9</b> (외부 auth 1 포함)</span>
+      <span class="chip">선언 FK <b>7</b></span>
+      <span class="chip">복합 PK <b>2</b></span>
+      <span class="chip">상태 머신 <b>writing_sessions.status</b></span>
+    </div>
+  </header>
+
+  <div class="legend">
+    <span class="li"><span class="dom identity"></span> 신원 / Identity</span>
+    <span class="li"><span class="dom activity"></span> 필사 활동 &amp; 통계</span>
+    <span class="li"><span class="dom content"></span> 콘텐츠 (성경 본문)</span>
+    <span class="li"><span class="kbadge pk">PK</span> 기본키</span>
+    <span class="li"><span class="kbadge fk">FK</span> 외래키</span>
+    <span class="li"><span style="color:var(--identity)">──</span> users 참조 &nbsp; <span style="color:var(--content)">──</span> verses 참조 &nbsp; <span style="color:var(--ink-dim)">╌╌</span> 암묵 관계</span>
+  </div>
+
+  <p class="hint">← 가로로 스크롤하면 전체 관계도가 보입니다 →</p>
+
+  <div class="erd-scroll">
+    <div id="erd">
+      <svg class="links" id="links"></svg>
+      <div class="erd-col" data-col="1"></div>
+      <div class="erd-col" data-col="2"></div>
+      <div class="erd-col" data-col="3"></div>
+    </div>
+  </div>
+
+  <!-- ===== design notes ===== -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>설계 노트 · 데이터베이스시스템</h2></div>
+    <p class="sec-desc">스키마의 각 결정을 정규화·동시성 제어·접근 패턴 관점에서 설명한다.</p>
+    <div class="notes">
+      <div class="note">
+        <h3>상태 머신 = 원자적 클레임 대상 <span class="tag">동시성 제어</span></h3>
+        <p><code>writing_sessions.status</code>의 CHECK 제약(<code>pending·uploaded·processing·completed·failed</code>)이 잡 상태다. 스케줄러가 <code>update … where status='uploaded'</code>로 원자적 클레임 → 별도 큐 인프라 없이 <b style="color:var(--ink)">DB 트랜잭션만으로</b> 다중 인스턴스 이중 처리를 차단.</p>
+      </div>
+      <div class="note">
+        <h3>관심사 분리 · 1:1 <span class="tag">정규화</span></h3>
+        <p><code>user_statistics</code>를 <code>users</code>에서 떼어냈다. streak·집계는 필사마다 갱신되는 <b style="color:var(--ink)">고빈도 write</b>라, 갱신 주기가 다른 프로필과 한 행에 두면 잠금 경합·행 부풀림이 생긴다. 접근 패턴으로 테이블을 가른 결정.</p>
+      </div>
+      <div class="note">
+        <h3>복합 기본키 <span class="tag">무결성</span></h3>
+        <p><code>user_daily_activity(user_id, activity_date)</code> — 사용자×날짜 유일. <code>book_infos(translation_code, book_no)</code> — 번역본별 책 유일. 자연키 복합 PK로 중복을 <b style="color:var(--ink)">스키마 차원에서</b> 원천 차단.</p>
+      </div>
+      <div class="note">
+        <h3>의도적 비정규화 <span class="tag">읽기 최적화</span></h3>
+        <p><code>writing_sessions</code>는 <code>key_verse_id</code>와 별도로 <code>book_no·chapter·start/end_verse_no</code>를 보관한다. 필사 범위는 여러 절에 걸치고, 조회가 지배적인 해빗 트래커에서 <b style="color:var(--ink)">verses 조인 없이</b> 범위를 읽기 위한 선택.</p>
+      </div>
+      <div class="note">
+        <h3>인증 위임 · FK 체인 <span class="tag">컴퓨터보안</span></h3>
+        <p>모든 사용자 데이터는 <code>users</code>로 FK가 모이고, <code>users.id</code>는 다시 <code>auth.users.id</code>(Supabase Auth)로 FK. 인증 신원과 도메인 프로필을 <b style="color:var(--ink)">1:1로 고정</b>해 고아 레코드를 방지.</p>
+      </div>
+      <div class="note implicit">
+        <h3>암묵 관계 (개선 여지) <span class="tag">미선언 FK</span></h3>
+        <p><code>book_infos</code> ↔ <code>verses</code>는 <code>(translation_code, book_no)</code>로 개념적으로 이어지나 <b style="color:var(--ink)">FK가 선언돼 있지 않다.</b> 현재는 앱 레벨 보장 — 선언적 복합 FK로 승격하면 무결성이 스키마로 강제된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>reverse-growthlog · 데이터 모델 ERD</span>
+    <span>Supabase · Postgres · asia-northeast3</span>
+  </footer>
+</div>
+
+<script>
+const T={uuid:'uuid',text:'text',int8:'bigint',int2:'smallint',int4:'int',tstz:'timestamptz',date:'date',num:'numeric',bool:'bool'};
+const entities=[
+  {id:'auth_users',name:'auth.users',kr:'Supabase Auth',dom:'identity',col:1,external:true,
+   cols:[{n:'id',t:'uuid',pk:1},{n:'…',t:'',more:1}]},
+  {id:'users',name:'users',kr:'사용자',dom:'identity',col:1,
+   cols:[{n:'id',t:'uuid',pk:1,fk:'auth_users'},{n:'email',t:'text'},{n:'provider',t:'text'},
+     {n:'display_name',t:'text'},{n:'avatar_url',t:'text'},{n:'language',t:'text'},
+     {n:'created_at',t:'tstz'},{n:'updated_at',t:'tstz'}]},
+  {id:'user_statistics',name:'user_statistics',kr:'통계 · 스트릭',dom:'activity',col:1,
+   cols:[{n:'user_id',t:'uuid',pk:1,fk:'users'},{n:'current_streak',t:'int4'},{n:'longest_streak',t:'int4'},
+     {n:'total_count',t:'int4'},{n:'last_written_date',t:'date'},{n:'freeze_available',t:'int2'},{n:'updated_at',t:'tstz'}]},
+  {id:'user_daily_activity',name:'user_daily_activity',kr:'일별 활동',dom:'activity',col:1,
+   cols:[{n:'user_id',t:'uuid',pk:1,fk:'users'},{n:'activity_date',t:'date',pk:1},{n:'count',t:'int4'}]},
+  {id:'streak_freeze_events',name:'streak_freeze_events',kr:'프리즈 이벤트',dom:'activity',col:1,
+   cols:[{n:'id',t:'uuid',pk:1},{n:'user_id',t:'uuid',fk:'users'},{n:'type',t:'text'},{n:'reason',t:'text'},{n:'created_at',t:'tstz'}]},
+
+  {id:'writing_sessions',name:'writing_sessions',kr:'필사 세션 · 핵심',dom:'activity',col:2,
+   cols:[{n:'id',t:'uuid',pk:1},{n:'user_id',t:'uuid',fk:'users'},{n:'key_verse_id',t:'int8',fk:'verses'},
+     {n:'object_key',t:'text'},{n:'status',t:'text',state:1},{n:'recognized_text',t:'text'},
+     {n:'similarity_score',t:'num'},{n:'passed',t:'bool'},{n:'language',t:'text'},
+     {n:'start_verse_no',t:'int2'},{n:'end_verse_no',t:'int2'},{n:'book_no',t:'int2'},{n:'chapter',t:'int2'},
+     {n:'client_date',t:'date'},{n:'meditation',t:'text'},{n:'application',t:'text'},{n:'prayer',t:'text'},
+     {n:'created_at',t:'tstz'},{n:'completed_at',t:'tstz'}]},
+
+  {id:'verses',name:'verses',kr:'성경 본문',dom:'content',col:3,
+   cols:[{n:'id',t:'int8',pk:1},{n:'translation_code',t:'text'},{n:'book_no',t:'int2'},{n:'book_name',t:'text'},
+     {n:'chapter',t:'int2'},{n:'verse_no',t:'int2'},{n:'text',t:'text'},{n:'created_at',t:'tstz'}]},
+  {id:'daily_verses',name:'daily_verses',kr:'오늘의 구절',dom:'content',col:3,
+   cols:[{n:'activity_date',t:'date',pk:1},{n:'verse_id',t:'int8',fk:'verses'},{n:'created_at',t:'tstz'}]},
+  {id:'book_infos',name:'book_infos',kr:'책 소개',dom:'content',col:3,
+   cols:[{n:'translation_code',t:'text',pk:1},{n:'book_no',t:'int2',pk:1},{n:'book_name',t:'text'},
+     {n:'summary',t:'text'},{n:'author',t:'text'},{n:'core_theme',t:'text'},{n:'youtube_url',t:'text'},{n:'…',t:'',more:1}]},
+];
+const rels=[
+  {from:'auth_users',to:'users',card:'1:1',dom:'identity',bow:'left',i:0},
+  {from:'users',to:'user_statistics',card:'1:1',dom:'identity',bow:'left',i:1},
+  {from:'users',to:'user_daily_activity',card:'1:N',dom:'identity',bow:'left',i:2},
+  {from:'users',to:'streak_freeze_events',card:'1:N',dom:'identity',bow:'left',i:3},
+  {from:'users',to:'writing_sessions',card:'1:N',dom:'identity'},
+  {from:'verses',to:'writing_sessions',card:'1:N',dom:'content'},
+  {from:'verses',to:'daily_verses',card:'1:N',dom:'content',bow:'right',i:0},
+  {from:'book_infos',to:'verses',card:'~',dom:'implicit',bow:'right',i:1},
+];
+const COLOR={identity:getVar('--identity'),content:getVar('--content'),implicit:getVar('--ink-dim')};
+function getVar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+// render entities
+for(const e of entities){
+  const col=document.querySelector(`.erd-col[data-col="${e.col}"]`);
+  const card=document.createElement('div');
+  card.className=`entity ${e.dom}${e.external?' external':''}`;
+  card.id='ent-'+e.id;
+  let rows='';
+  for(const c of e.cols){
+    if(c.more){rows+=`<div class="col-more">＋ 추가 컬럼</div>`;continue;}
+    const key=(c.pk||c.fk)?' key':'';
+    const st=c.state?' state':'';
+    let mk='';
+    if(c.pk)mk+='<span class="kbadge pk">PK</span>';
+    if(c.fk)mk+='<span class="kbadge fk">FK</span>';
+    const stag=c.state?'<span class="stag">상태 머신</span>':'';
+    rows+=`<div class="col-row${key}${st}"><span class="cn">${c.n}</span>${stag}
+      <span class="ct">${T[c.t]||''}</span><span class="mk">${mk}</span></div>`;
+  }
+  card.innerHTML=`<div class="e-head"><span class="en">${e.name}</span><span class="kr">${e.kr}</span></div>${rows}`;
+  col.appendChild(card);
+}
+
+const svg=document.getElementById('links');
+const NS='http://www.w3.org/2000/svg';
+function draw(){
+  const box=document.getElementById('erd').getBoundingClientRect();
+  svg.innerHTML='';
+  for(const r of rels){
+    const A=document.getElementById('ent-'+r.from), B=document.getElementById('ent-'+r.to);
+    if(!A||!B)continue;
+    const a=A.getBoundingClientRect(), b=B.getBoundingClientRect();
+    const acx=a.left+a.width/2-box.left, bcx=b.left+b.width/2-box.left;
+    const sameCol=Math.abs(acx-bcx)<60;
+    let x1,y1,x2,y2,c1x,c1y,c2x,c2y;
+    const color=COLOR[r.dom]||COLOR.implicit;
+
+    if(sameCol){
+      const side=r.bow==='right'?1:-1;
+      const edgeX_from = side>0 ? a.right-box.left : a.left-box.left;
+      const edgeX_to   = side>0 ? b.right-box.left : b.left-box.left;
+      const down = (b.top>a.top);
+      y1=(down? a.bottom : a.top)-box.top;
+      y2=(down? b.top : b.bottom)-box.top;
+      x1=edgeX_from; x2=edgeX_to;
+      const bow=(38+ (r.i||0)*26)*side;
+      c1x=x1+bow; c1y=y1; c2x=x2+bow; c2y=y2;
+    }else{
+      const toRight = bcx>acx;
+      x1=(toRight? a.right : a.left)-box.left;
+      x2=(toRight? b.left : b.right)-box.left;
+      // vertical anchor: aim near the FK row height-ish (use header area)
+      y1=a.top-box.top+34;
+      y2=b.top-box.top+34;
+      const k=Math.abs(x2-x1)*0.45;
+      c1x=x1+(toRight?k:-k); c1y=y1;
+      c2x=x2+(toRight?-k:k); c2y=y2;
+    }
+    const p=document.createElementNS(NS,'path');
+    p.setAttribute('d',`M ${x1} ${y1} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2} ${y2}`);
+    p.setAttribute('fill','none');
+    p.setAttribute('stroke',color);
+    p.setAttribute('stroke-width','1.6');
+    p.setAttribute('opacity', r.dom==='implicit'?'0.6':'0.85');
+    if(r.dom==='implicit')p.setAttribute('stroke-dasharray','5 5');
+    svg.appendChild(p);
+
+    // endpoint markers: bar (1) at parent, dot(s) at child
+    mkDot(x1,y1,color,false);
+    mkDot(x2,y2,color,true);
+    // cardinality label near child
+    const lx=x2 + (x2>=x1? -14:14), ly=y2 - 10;
+    label(r.card.split(':').pop(), lx, ly, color);
+    label(r.card.split(':')[0], x1 + (x1>x2?-8:8), y1-10, color);
+  }
+}
+function mkDot(x,y,c,filled){
+  const d=document.createElementNS(NS,'circle');
+  d.setAttribute('cx',x);d.setAttribute('cy',y);d.setAttribute('r',3.2);
+  d.setAttribute('fill',filled?c:getVar('--bg'));
+  d.setAttribute('stroke',c);d.setAttribute('stroke-width','1.4');
+  svg.appendChild(d);
+}
+function label(txt,x,y,c){
+  if(!txt||txt==='~')return;
+  const t=document.createElementNS(NS,'text');
+  t.setAttribute('x',x);t.setAttribute('y',y);
+  t.setAttribute('fill',c);t.setAttribute('font-size','11');
+  t.setAttribute('font-family',getVar('--mono'));t.setAttribute('font-weight','600');
+  t.setAttribute('text-anchor','middle');t.textContent=txt;
+  svg.appendChild(t);
+}
+let tmr;
+function schedule(){clearTimeout(tmr);tmr=setTimeout(draw,60);}
+window.addEventListener('load',()=>setTimeout(draw,120));
+window.addEventListener('resize',schedule);
+document.querySelector('.erd-scroll').addEventListener('scroll',schedule);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(draw,80));
+</script>
+</body>
+</html>
