@@ -6,6 +6,7 @@ import type { Env } from '../../config/env.validation';
 import {
   PassedWritingRange,
   WritingLanguage,
+  WritingListItem,
   WritingSession,
   WritingSessionStatus,
 } from './writing.types';
@@ -26,8 +27,27 @@ interface WritingSessionRow {
   similarity_score: number | null;
   passed: boolean | null;
   client_date: string | null;
+  meditation: string | null;
+  application: string | null;
+  prayer: string | null;
   created_at: string;
   completed_at: string | null;
+}
+
+/** 목록 조회 select 결과 행 — 세션 컬럼 일부 + verses FK embed(key_verse). */
+interface WritingListRow extends Pick<
+  WritingSessionRow,
+  | 'id'
+  | 'book_no'
+  | 'chapter'
+  | 'start_verse_no'
+  | 'end_verse_no'
+  | 'language'
+  | 'client_date'
+  | 'meditation'
+  | 'completed_at'
+> {
+  key_verse: { chapter: number; verse_no: number } | null;
 }
 
 /** DB 행(snake_case) → 앱 객체(camelCase) 변환. */
@@ -47,6 +67,9 @@ function toWritingSession(row: WritingSessionRow): WritingSession {
     similarityScore: row.similarity_score,
     passed: row.passed,
     clientDate: row.client_date,
+    meditation: row.meditation,
+    application: row.application,
+    prayer: row.prayer,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -116,13 +139,18 @@ export class WritingRepository {
    * 유사도 검사를 위해 세션을 원자적으로 선점한다.
    * `status in (fromStatuses)` 조건이 걸린 update라 동시 요청 중 한쪽만 성공하고,
    * 나머지는 null을 받는다 (check-then-act 경쟁 방지). key verse와 client_date
-   * (잔디/streak 기준일)도 이 시점에 확정된다 — 재시도 complete가 새 날짜로
-   * 들어오면 마지막 요청의 값으로 덮어쓴다.
+   * (잔디/streak 기준일), QT(묵상/적용/기도제목)도 이 시점에 확정된다 —
+   * 재시도 complete가 새 값으로 들어오면 마지막 요청의 값으로 덮어쓴다.
    */
   async claimForProcessing(
     id: string,
     keyVerseId: number,
     clientDate: string,
+    qt: {
+      meditation: string | null;
+      application: string | null;
+      prayer: string | null;
+    },
     fromStatuses: WritingSessionStatus[],
   ): Promise<WritingSession | null> {
     const { data, error } = await this.supabase
@@ -131,6 +159,9 @@ export class WritingRepository {
         status: 'processing',
         key_verse_id: keyVerseId,
         client_date: clientDate,
+        meditation: qt.meditation,
+        application: qt.application,
+        prayer: qt.prayer,
       })
       .eq('id', id)
       .in('status', fromStatuses)
@@ -227,6 +258,53 @@ export class WritingRepository {
       chapter: row.chapter,
       startVerseNo: row.start_verse_no,
       endVerseNo: row.end_verse_no,
+    }));
+  }
+
+  /**
+   * 최근 필사 기록 목록 — 통과(passed=true)한 세션을 최신순 flat 목록으로 조회한다.
+   * `key_verse:verses!key_verse_id(...)`는 PostgREST FK embed로, key_verse_id가
+   * 가리키는 verses 행의 주소를 중첩 객체로 함께 받는다(별도 조회 N+1 회피).
+   */
+  async findPassedListByUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<WritingListItem[]> {
+    const { data, error } = await this.supabase
+      .from('writing_sessions')
+      .select(
+        'id, book_no, chapter, start_verse_no, end_verse_no, language, ' +
+          'client_date, meditation, completed_at, ' +
+          'key_verse:verses!key_verse_id(chapter, verse_no)',
+        // key_verse: 결과에 붙일 명칭 (key_verse: {} 형태로 들어옴)
+        // verse: 조인할 테이블
+        // !key_verse_id: 어떤 fk 를 따라갈지 명시
+        // (chapter, verse_no): 조인된 verses 행에서 가져올 컬럼 key_verse: { chpater: xx, verse_no: xx } 형태로 들어옴
+      )
+      .eq('user_id', userId)
+      .eq('passed', true)
+      .order('client_date', { ascending: false })
+      .order('completed_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+      .overrideTypes<WritingListRow[], { merge: false }>();
+
+    if (error) {
+      throw new Error(`필사 기록 목록 조회 실패: ${error.message}`);
+    }
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      bookNo: row.book_no,
+      chapter: row.chapter,
+      startVerseNo: row.start_verse_no,
+      endVerseNo: row.end_verse_no,
+      language: row.language,
+      clientDate: row.client_date,
+      meditation: row.meditation,
+      keyVerse: row.key_verse
+        ? { chapter: row.key_verse.chapter, verseNo: row.key_verse.verse_no }
+        : null,
+      completedAt: row.completed_at,
     }));
   }
 

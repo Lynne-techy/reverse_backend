@@ -24,6 +24,7 @@
   - [업로드 URL 발급 (세션 생성)](#업로드-url-발급-세션-생성) — `POST /writing-sessions/upload-url`
   - [기록 저장 (완료 요청)](#기록-저장-완료-요청) — `POST /writing-sessions/:id/complete`
   - [필사 세션 조회 (검사 결과 폴링)](#필사-세션-조회-검사-결과-폴링) — `GET /writing-sessions/:id`
+  - [최근 필사 기록 목록](#최근-필사-기록-목록) — `GET /writing-sessions`
 - [stats — 통계/잔디](#stats--통계잔디)
   - [내 통계 조회 (streak)](#내-통계-조회-streak) — `GET /stats/me`
   - [활동 기록 조회 (잔디)](#활동-기록-조회-잔디) — `GET /stats/activity`
@@ -208,11 +209,17 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
 `date`(YYYY-MM-DD, 클라이언트 로컬 날짜)가 잔디/streak 기준일 — `/verses/today`와 동일 방침.
 `failed` 세션은 같은 요청으로 재시도 가능.
 
+QT(`meditation` 묵상 / `application` 적용 / `prayer` 기도제목)는 **모두 선택 입력**(각 최대 500자).
+공백만 보내면 미작성(null)으로 저장됩니다. 완료 후 별도 수정 API는 없습니다(기획상 완료 후 작성 불가).
+
 ```json
 // Request
 {
     "keyVerseId": 14261,       // 필사 범위 안의 절이어야 함
-    "date": "2026-07-15"       // 클라이언트 로컬 날짜
+    "date": "2026-07-15",      // 클라이언트 로컬 날짜
+    "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",  // 선택
+    "application": "오늘 결정할 일을 내 명철 대신 기도로 시작한다.",    // 선택
+    "prayer": "흔들리는 진로 앞에서 주님을 신뢰하게 하소서."           // 선택
 }
 
 // Response — 검사 결과는 아직 없음(폴링으로 확인)
@@ -231,6 +238,9 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
     "similarityScore": null,
     "passed": null,
     "clientDate": "2026-07-15",
+    "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",
+    "application": "오늘 결정할 일을 내 명철 대신 기도로 시작한다.",
+    "prayer": "흔들리는 진로 앞에서 주님을 신뢰하게 하소서.",
     "createdAt": "2026-07-16T12:53:13.871186+00:00",
     "completedAt": null
 }
@@ -260,9 +270,50 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
   "similarityScore": 100,
   "passed": true,
   "clientDate": "2026-07-15",
+  "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",
+  "application": "오늘 결정할 일을 내 명철 대신 기도로 시작한다.",
+  "prayer": "흔들리는 진로 앞에서 주님을 신뢰하게 하소서.",
   "createdAt": "2026-07-16T12:53:13.871186+00:00",
   "completedAt": "2026-07-16T13:42:22.6+00:00"
 }
+```
+
+### 최근 필사 기록 목록
+
+- [x] `GET /writing-sessions?limit=10&offset=0`
+
+통과(`passed: true`)한 내 필사 기록을 최신순(`clientDate` → 같은 날은 `completedAt`)으로
+반환합니다. 홈 "최근 필사 기록"·"필사 타임라인" 화면용. 날짜 그룹핑·"N건" 카운트는 클라이언트 몫.
+`limit` 기본 10·최대 50, `offset` 기본 0 — 받은 개수가 `limit`보다 적으면 마지막 페이지입니다.
+`meditation`이 `null`이면 "(묵상 미작성)"으로 표시. `keyVerse`는 complete 때 고른 대표 절의 주소.
+
+```json
+[
+  {
+    "id": "f2ffd7b7-ec1c-4879-a74f-17271587aba7",
+    "bookNo": 20,
+    "chapter": 1,
+    "startVerseNo": 1,
+    "endVerseNo": 3,
+    "language": "ko",
+    "clientDate": "2026-07-16",
+    "meditation": "한/영 나란히 적으니 trust의 무게가 다르게 읽힌다.",
+    "keyVerse": { "chapter": 1, "verseNo": 1 },
+    "completedAt": "2026-07-16T13:47:16.404+00:00"
+  },
+  {
+    "id": "435b2fcf-1237-407c-a312-2781fcadfd29",
+    "bookNo": 22,
+    "chapter": 1,
+    "startVerseNo": 1,
+    "endVerseNo": 3,
+    "language": "ko",
+    "clientDate": "2026-07-15",
+    "meditation": null,
+    "keyVerse": { "chapter": 1, "verseNo": 1 },
+    "completedAt": "2026-07-16T13:43:01.042+00:00"
+  }
+]
 ```
 
 ## stats — 통계/잔디

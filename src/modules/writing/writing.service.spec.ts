@@ -36,9 +36,19 @@ const baseSession: WritingSession = {
   recognizedText: null,
   similarityScore: null,
   passed: null,
+  clientDate: null,
+  meditation: null,
+  application: null,
+  prayer: null,
   createdAt: '2026-07-12T00:00:00Z',
   completedAt: null,
 };
+
+/** QT 미입력 complete 요청 (필드 자체를 안 보낸 경우). */
+const emptyQt = {};
+
+/** claimForProcessing에 저장되는 QT 기본값 — 미입력은 모두 null로 정규화된다. */
+const nullQt = { meditation: null, application: null, prayer: null };
 
 const keyVerse: Verse = {
   id: 7,
@@ -70,6 +80,7 @@ describe('WritingService', () => {
       | 'markFailed'
       | 'failStaleProcessing'
       | 'downloadImage'
+      | 'findPassedListByUser'
     >
   >;
   let statsService: jest.Mocked<Pick<StatsService, 'recordWriting'>>;
@@ -87,6 +98,7 @@ describe('WritingService', () => {
       markFailed: jest.fn(),
       failStaleProcessing: jest.fn(),
       downloadImage: jest.fn(),
+      findPassedListByUser: jest.fn(),
     };
     statsService = { recordWriting: jest.fn() };
     verseService = { findById: jest.fn(), getRange: jest.fn() };
@@ -134,20 +146,20 @@ describe('WritingService', () => {
     it('세션이 없으면 404', async () => {
       repository.findById.mockResolvedValue(null);
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('실존하지 않는 날짜면 400 (형식은 DTO 정규식을 통과하는 값)', async () => {
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id, '2026-02-31'),
+        service.complete('user-1', 'session-1', keyVerse.id, '2026-02-31', emptyQt),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(repository.claimForProcessing).not.toHaveBeenCalled();
     });
 
     it('남의 세션이면 403', async () => {
       await expect(
-        service.complete('other-user', 'session-1', keyVerse.id, clientDate),
+        service.complete('other-user', 'session-1', keyVerse.id, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -157,7 +169,7 @@ describe('WritingService', () => {
         status: 'completed',
       });
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -167,46 +179,68 @@ describe('WritingService', () => {
         status: 'processing',
       });
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('key verse가 없으면 404', async () => {
       verseService.findById.mockResolvedValue(null);
       await expect(
-        service.complete('user-1', 'session-1', 999, clientDate),
+        service.complete('user-1', 'session-1', 999, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('key verse가 필사 범위 밖이면 400', async () => {
       verseService.findById.mockResolvedValue({ ...keyVerse, verseNo: 1 });
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('동시 요청이 먼저 선점해 클레임이 비면 409', async () => {
       repository.claimForProcessing.mockResolvedValue(null);
       await expect(
-        service.complete('user-1', 'session-1', keyVerse.id, clientDate),
+        service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('선점 후 processing 세션을 즉시 반환한다', async () => {
-      const result = await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      const result = await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
 
       expect(result.status).toBe('processing');
       expect(repository.claimForProcessing).toHaveBeenCalledWith(
         'session-1',
         keyVerse.id,
         clientDate,
+        nullQt,
+        ['pending', 'uploaded', 'failed'],
+      );
+      await flushBackgroundJobs();
+    });
+
+    it('QT 입력은 trim해서 저장하고, 공백만인 값은 미작성(null)으로 정규화한다', async () => {
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, {
+        meditation: '  trust의 무게가 다르게 읽힌다  ',
+        application: '   ',
+        // prayer는 필드 자체를 보내지 않음
+      });
+
+      expect(repository.claimForProcessing).toHaveBeenCalledWith(
+        'session-1',
+        keyVerse.id,
+        clientDate,
+        {
+          meditation: 'trust의 무게가 다르게 읽힌다',
+          application: null,
+          prayer: null,
+        },
         ['pending', 'uploaded', 'failed'],
       );
       await flushBackgroundJobs();
     });
 
     it('통과 점수면 completed(passed=true)로 마감하고 잔디/streak에 반영한다', async () => {
-      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
       await flushBackgroundJobs();
 
       expect(handwritingCheckService.checkAndLog).toHaveBeenCalledWith(
@@ -231,7 +265,7 @@ describe('WritingService', () => {
         similarityScore: 40,
       });
 
-      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
       await flushBackgroundJobs();
 
       expect(repository.markCompleted).toHaveBeenCalledWith(
@@ -247,7 +281,7 @@ describe('WritingService', () => {
         isPenHandwriting: false,
       });
 
-      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
       await flushBackgroundJobs();
 
       expect(repository.markCompleted).toHaveBeenCalledWith(
@@ -263,7 +297,7 @@ describe('WritingService', () => {
         similarityScore: null,
       });
 
-      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
       await flushBackgroundJobs();
 
       expect(repository.markCompleted).toHaveBeenCalledWith(
@@ -278,7 +312,7 @@ describe('WritingService', () => {
         new Error('Gemini down'),
       );
 
-      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
       await flushBackgroundJobs();
 
       expect(repository.markFailed).toHaveBeenCalledWith('session-1');
@@ -289,7 +323,7 @@ describe('WritingService', () => {
     it('범위 원문이 비어 있으면 failed로 남긴다', async () => {
       verseService.getRange.mockResolvedValue([]);
 
-      await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
       await flushBackgroundJobs();
 
       expect(repository.markFailed).toHaveBeenCalledWith('session-1');
@@ -302,10 +336,45 @@ describe('WritingService', () => {
         status: 'failed',
       });
 
-      const result = await service.complete('user-1', 'session-1', keyVerse.id, clientDate);
+      const result = await service.complete('user-1', 'session-1', keyVerse.id, clientDate, emptyQt);
 
       expect(result.status).toBe('processing');
       await flushBackgroundJobs();
+    });
+  });
+
+  describe('listMyWritings', () => {
+    it('본인 userId와 limit/offset을 그대로 repository에 전달한다', async () => {
+      const item = {
+        id: 'session-1',
+        bookNo: 19,
+        chapter: 23,
+        startVerseNo: 1,
+        endVerseNo: 6,
+        language: 'ko' as const,
+        clientDate: '2026-07-17',
+        meditation: '묵상 내용',
+        keyVerse: { chapter: 23, verseNo: 6 },
+        completedAt: '2026-07-17T09:00:00Z',
+      };
+      repository.findPassedListByUser.mockResolvedValue([item]);
+
+      await expect(service.listMyWritings('user-1', 10, 20)).resolves.toEqual([
+        item,
+      ]);
+      expect(repository.findPassedListByUser).toHaveBeenCalledWith(
+        'user-1',
+        10,
+        20,
+      );
+    });
+
+    it('통과한 기록이 없으면 빈 배열을 반환한다', async () => {
+      repository.findPassedListByUser.mockResolvedValue([]);
+
+      await expect(service.listMyWritings('user-1', 10, 0)).resolves.toEqual(
+        [],
+      );
     });
   });
 

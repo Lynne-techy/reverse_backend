@@ -7,8 +7,9 @@
 `main` 최신. **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). CI/CD는 **레지스트리 빌드로 전환 완료**(GitHub Actions가 빌드해
 Artifact Registry push, VM은 pull만 — 매일 1회 자동 배포). 로컬 `.env` 있음(개발/시딩 가능).
-현재 작업 브랜치: **`chore/review-fixes`** — clientDate 전환·streakStart·API 문서 개편 등
-6커밋, main으로 PR 예정. 남은 것: 프론트 `RecommendPage` 실제 구현(팀원), 모니터링 알림
+현재 작업 브랜치: **`feat/recent-writing`** — QT(묵상/적용/기도제목) 저장 + 최근 필사 기록
+목록 API(`GET /writing-sessions`) 완료, PR 생성 예정. (`chore/review-fixes`는 PR #9로 merge 완료.)
+남은 것: 프론트 `RecommendPage` 실제 구현(팀원), 모니터링 알림
 정책(선택), e2-medium 리사이즈(부하 시).
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
@@ -44,7 +45,6 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 
 ## 다음 단계 (백로그)
 - [ ] 구절 검색/목록 API 확장 — 현재 `GET /verses`는 같은 장 범위 조회만.
-- [ ] (미정) QT(묵상/적용/기도) — 자유 텍스트 vs 태그 제안형 미확정.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 - [ ] 프론트 신규 페이지(Login/pilsa/heatmap 등) 라우터 배선 — 팀원 작업
 - [ ] 밤하늘 밝기용 **절별 필사 횟수** 엔드포인트 — 마이페이지 별밤(0→3회 밝기)은 절 주소별
@@ -123,6 +123,20 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-17: **최근 필사 기록 목록 API `GET /writing-sessions` 완료** — 백로그 설계대로
+  통과분만 최신순(`client_date` desc → `completed_at` desc tiebreaker, offset 페이지 안정성)
+  flat 목록 + `limit`(기본 10/최대 50)/`offset`. **PostgREST FK embed 첫 도입**
+  (`key_verse:verses!key_verse_id(chapter, verse_no)` — N+1 없이 대표 절 주소 포함).
+  정렬/페이지 체인은 Learn-by-Doing으로 직접 구현. jest 54/54 + dev 토큰 실요청 스모크
+  (정렬·경계값·401) + API_SUMMARY 동기화. QT 커밋과 묶어 PR 예정.
+- 2026-07-17: **QT(묵상/적용/기도제목) 저장 — complete에 통합**. 필사 기록 입력 화면(QT 단계) 대응.
+  태그 제안형 대신 **자유 텍스트 + 전부 선택 입력**으로 확정(텍스트→태그 확장은 가능하나 역방향
+  불가라 되돌릴 수 있는 쪽 선택). ①마이그레이션 `20260717000000_writing_session_qt.sql`
+  (nullable text ×3, 500자 check) — `supabase db push` 원격 반영 완료(컬럼 조회로 검증) ②`POST
+  /writing-sessions/:id/complete` body에 optional `meditation`/`application`/`prayer`
+  (claim 시점 저장, 재시도가 덮어씀) ③service `normalizeQtText`: trim 후 공백만이면 null
+  (최근 기록 화면 "(묵상 미작성)" 판단이 null 의존) — Learn-by-Doing으로 직접 구현.
+  완료 후 QT 수정 API는 기획상 없음(필요 시 PATCH 추가). jest 52/52 + API_SUMMARY 동기화.
 - 2026-07-16: **API 문서 전면 개편 + 프로필·설정 화면 대조**. `API_SUMMARY.md`에 기능별
   소제목(`###`)·상단 목차·전 엔드포인트 실측 응답 예시 추가(노션 팀 공유용) + CLAUDE.md에
   "API 변경 시 문서 동기화" 규칙 추가. 프로필·설정 화면 대조 결과 **백엔드 갭 없음** 확인
