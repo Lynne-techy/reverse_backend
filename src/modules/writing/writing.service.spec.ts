@@ -80,6 +80,7 @@ describe('WritingService', () => {
       | 'markFailed'
       | 'failStaleProcessing'
       | 'downloadImage'
+      | 'findPassedListByUser'
     >
   >;
   let statsService: jest.Mocked<Pick<StatsService, 'recordWriting'>>;
@@ -97,6 +98,7 @@ describe('WritingService', () => {
       markFailed: jest.fn(),
       failStaleProcessing: jest.fn(),
       downloadImage: jest.fn(),
+      findPassedListByUser: jest.fn(),
     };
     statsService = { recordWriting: jest.fn() };
     verseService = { findById: jest.fn(), getRange: jest.fn() };
@@ -338,6 +340,41 @@ describe('WritingService', () => {
 
       expect(result.status).toBe('processing');
       await flushBackgroundJobs();
+    });
+  });
+
+  describe('listMyWritings', () => {
+    it('본인 userId와 limit/offset을 그대로 repository에 전달한다', async () => {
+      const item = {
+        id: 'session-1',
+        bookNo: 19,
+        chapter: 23,
+        startVerseNo: 1,
+        endVerseNo: 6,
+        language: 'ko' as const,
+        clientDate: '2026-07-17',
+        meditation: '묵상 내용',
+        keyVerse: { chapter: 23, verseNo: 6 },
+        completedAt: '2026-07-17T09:00:00Z',
+      };
+      repository.findPassedListByUser.mockResolvedValue([item]);
+
+      await expect(service.listMyWritings('user-1', 10, 20)).resolves.toEqual([
+        item,
+      ]);
+      expect(repository.findPassedListByUser).toHaveBeenCalledWith(
+        'user-1',
+        10,
+        20,
+      );
+    });
+
+    it('통과한 기록이 없으면 빈 배열을 반환한다', async () => {
+      repository.findPassedListByUser.mockResolvedValue([]);
+
+      await expect(service.listMyWritings('user-1', 10, 0)).resolves.toEqual(
+        [],
+      );
     });
   });
 

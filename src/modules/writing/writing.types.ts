@@ -52,6 +52,27 @@ export interface QtInput {
   prayer?: string;
 }
 
+/**
+ * 최근 필사 기록 목록의 한 항목. 홈 "최근 필사 기록"·"필사 타임라인" 카드용 —
+ * 통과(passed=true)한 세션만 대상이라 status/passed/점수는 싣지 않는다.
+ * 날짜 그룹핑·"N건" 카운트는 프론트 몫이므로 flat 목록으로 준다.
+ */
+export interface WritingListItem {
+  id: string;
+  bookNo: number;
+  chapter: number;
+  startVerseNo: number;
+  endVerseNo: number;
+  language: WritingLanguage;
+  /** 잔디/streak 기준일(클라이언트 로컬 날짜). 프론트가 이 값으로 날짜 그룹핑한다. */
+  clientDate: string | null;
+  /** QT 묵상 — 카드 본문. null이면 프론트가 "(묵상 미작성)"을 표시한다. */
+  meditation: string | null;
+  /** 대표 절 주소 (verses FK embed). complete를 거친 세션이므로 항상 존재한다. */
+  keyVerse: { chapter: number; verseNo: number } | null;
+  completedAt: string | null;
+}
+
 /** 진척률 계산 입력 — 통과(passed=true)한 필사 세션의 범위만 추출한 값. */
 export interface PassedWritingRange {
   bookNo: number;

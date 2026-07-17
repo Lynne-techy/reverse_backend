@@ -7,8 +7,9 @@
 `main` 최신. **프로덕션 전체 스택 라이브** — https://reverse-growthlog.com
 (web/api/health/db 모두 200). CI/CD는 **레지스트리 빌드로 전환 완료**(GitHub Actions가 빌드해
 Artifact Registry push, VM은 pull만 — 매일 1회 자동 배포). 로컬 `.env` 있음(개발/시딩 가능).
-현재 작업 브랜치: **`feat/recent-writing`** — QT(묵상/적용/기도제목) 저장 완료,
-최근 필사 기록 목록 API는 다음 세션에(아래 참고). (`chore/review-fixes`는 PR #9로 merge 완료.) 남은 것: 프론트 `RecommendPage` 실제 구현(팀원), 모니터링 알림
+현재 작업 브랜치: **`feat/recent-writing`** — QT(묵상/적용/기도제목) 저장 + 최근 필사 기록
+목록 API(`GET /writing-sessions`) 완료, PR 생성 예정. (`chore/review-fixes`는 PR #9로 merge 완료.)
+남은 것: 프론트 `RecommendPage` 실제 구현(팀원), 모니터링 알림
 정책(선택), e2-medium 리사이즈(부하 시).
 쉬는 동안 VM 중지 권장: `gcloud compute instances stop reverse-vm --zone=asia-northeast3-a`
 
@@ -43,11 +44,6 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 (`ocr_jobs`/Python OCR 워커는 **폐기** — Gemini API 직접 호출로 대체.)
 
 ## 다음 단계 (백로그)
-- [ ] **`GET /writing-sessions` 목록 API** (다음 세션, 설계 확정) — 홈 "최근 필사 기록"·"필사
-  타임라인(전체보기)" 화면용. 통과(passed=true)만, 최신순 flat 목록 + `limit`/`offset`
-  (날짜 그룹핑·"N건" 카운트는 프론트 몫). 응답에 keyVerse(chapter/verseNo) 포함 필요
-  (`key_verse_id` FK embed) + `meditation`(카드 본문, null이면 "(묵상 미작성)").
-  과거 "stats.totalCount로 충분해 드롭" 결정은 이 화면들이 새로 생겨 번복.
 - [ ] 구절 검색/목록 API 확장 — 현재 `GET /verses`는 같은 장 범위 조회만.
 - [ ] (이후) emotion_tags, verse_emotion_tags, quests, user_quests
 - [ ] 프론트 신규 페이지(Login/pilsa/heatmap 등) 라우터 배선 — 팀원 작업
@@ -127,6 +123,12 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-17: **최근 필사 기록 목록 API `GET /writing-sessions` 완료** — 백로그 설계대로
+  통과분만 최신순(`client_date` desc → `completed_at` desc tiebreaker, offset 페이지 안정성)
+  flat 목록 + `limit`(기본 10/최대 50)/`offset`. **PostgREST FK embed 첫 도입**
+  (`key_verse:verses!key_verse_id(chapter, verse_no)` — N+1 없이 대표 절 주소 포함).
+  정렬/페이지 체인은 Learn-by-Doing으로 직접 구현. jest 54/54 + dev 토큰 실요청 스모크
+  (정렬·경계값·401) + API_SUMMARY 동기화. QT 커밋과 묶어 PR 예정.
 - 2026-07-17: **QT(묵상/적용/기도제목) 저장 — complete에 통합**. 필사 기록 입력 화면(QT 단계) 대응.
   태그 제안형 대신 **자유 텍스트 + 전부 선택 입력**으로 확정(텍스트→태그 확장은 가능하나 역방향
   불가라 되돌릴 수 있는 쪽 선택). ①마이그레이션 `20260717000000_writing_session_qt.sql`

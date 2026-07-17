@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { CompleteWritingSessionDto } from './dto/complete-writing-session.dto';
 import { CreateWritingSessionDto } from './dto/create-writing-session.dto';
+import { ListWritingSessionsQueryDto } from './dto/list-writing-sessions.dto';
 import { WritingService } from './writing.service';
-import { WritingSession } from './writing.types';
+import { WritingListItem, WritingSession } from './writing.types';
 
 @ApiTags('writing-sessions')
 @ApiBearerAuth('access-token')
@@ -31,6 +32,26 @@ export class WritingController {
       dto.startVerseNo,
       dto.endVerseNo,
       dto.language,
+    );
+  }
+
+  /** GET /writing-sessions — 내 필사 기록 목록(통과분, 최신순) */
+  @ApiOperation({
+    summary: '최근 필사 기록 목록',
+    description:
+      '통과(passed=true)한 내 필사 세션을 최신순(clientDate → completedAt)으로 반환한다. ' +
+      'limit/offset 페이지네이션 — 받은 개수가 limit보다 적으면 마지막 페이지다. ' +
+      '날짜 그룹핑·건수 카운트는 클라이언트가 수행한다. meditation이 null이면 "(묵상 미작성)"으로 표시한다.',
+  })
+  @Get()
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListWritingSessionsQueryDto,
+  ): Promise<WritingListItem[]> {
+    return this.writingService.listMyWritings(
+      user.userId,
+      query.limit,
+      query.offset,
     );
   }
 

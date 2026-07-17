@@ -20,6 +20,7 @@ import {
   PASS_MIN_SIMILARITY_SCORE,
   QtInput,
   WritingLanguage,
+  WritingListItem,
   WritingSession,
   WritingSessionStatus,
 } from './writing.types';
@@ -82,6 +83,19 @@ export class WritingService implements OnApplicationBootstrap {
       DEFAULT_TRANSLATION_CODE,
     );
     return calculateProgress(passedRanges, verseTotals);
+  }
+
+  /**
+   * 내 필사 기록 목록(통과분만, 최신순). 홈 "최근 필사 기록"·타임라인 화면용 —
+   * 날짜 그룹핑·건수 카운트는 프론트 몫이라 flat 목록으로 준다. 접근 제어는
+   * repository 쿼리의 user_id 필터가 담당하므로 여기서 추가 검사는 없다.
+   */
+  async listMyWritings(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<WritingListItem[]> {
+    return this.writingRepository.findPassedListByUser(userId, limit, offset);
   }
 
   /**
