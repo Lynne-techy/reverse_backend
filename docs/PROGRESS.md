@@ -123,6 +123,13 @@ OCI Object Storage 전환(현재 Supabase Storage 임시 사용).
 > 밖 메모리(`project_verses_perf_benchmark`)에 별도 기록.
 
 ## 최근 세션
+- 2026-07-18: **로컬 백엔드 PORT 63222→3000 변경**(임시 포트 범위 회피, `CLIENT_AUTH_FLOW.md`
+  localhost:3000 안내와 정합) + **프론트(`reverse_app`) 구글 OAuth 로그인 실배선**. `@supabase/
+  supabase-js`(+`tslib`) 설치, `src/lib/supabase.ts`(anon 키), `AuthContext`/`ProtectedRoute`/
+  `/auth/callback` 페이지 신설, `LoginPage` '구글로 시작하기'→`signInWithOAuth`. Vite dev 5173
+  고정 + `/api`→백엔드 프록시(CORS 회피). 프론트 `.env.local`에 **anon 키 입력 + Supabase
+  Redirect URLs에 `http://localhost:5173/auth/callback` 등록 필요**(사용자 액션). 기존 미완성
+  `HeatmapPage`(activity prop 누락) 빌드 에러는 별개(dev는 무영향).
 - 2026-07-17: **최근 필사 기록 목록 API `GET /writing-sessions` 완료** — 백로그 설계대로
   통과분만 최신순(`client_date` desc → `completed_at` desc tiebreaker, offset 페이지 안정성)
   flat 목록 + `limit`(기본 10/최대 50)/`offset`. **PostgREST FK embed 첫 도입**
