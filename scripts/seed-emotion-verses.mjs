@@ -55,21 +55,15 @@ async function main() {
   const rows = []; // emotion_verses 에 넣을 { emotion_code, verse_id }
   const missing = []; // DB에 없어 스킵한 { emotion_code, ref }
 
-  // TODO(human): emotions 를 순회하며 각 좌표를 resolveVerseId 로 verse_id 로 바꾼다.
-  //   emotions 는 { depression: [ {ref, book_no, chapter, verse_no}, ... ], fear: [...], ... } 형태.
-  //   찾으면 rows.push({ emotion_code, verse_id }), 못 찾으면 missing 에 모으고 경고를 남긴다.
+  // emotions = { depression: [ {ref, book_no, chapter, verse_no}, ... ], ... }.
+  // 감정 안에서는 좌표들을 병렬 조회(Promise.all)해 순차 왕복(~240회)을 감정당 1웨이브(~8회)로 줄인다.
+  // Promise.all 은 순서를 보존하므로 인덱스로 원래 coord(ref)를 되찾는다.
   for (const [emotion_code, coords] of Object.entries(emotions)) {
-    for (const coord of coords) {
-      const verseId = await resolveVerseId({
-        book_no: coord.book_no,
-        chapter: coord.chapter,
-        verse_no: coord.verse_no,
-      });
-
-      verseId
-        ? rows.push({ emotion_code, verse_id: verseId })
-        : missing.push({ emotion_code, ref: coord.ref });
-    }
+    const resolved = await Promise.all(coords.map((c) => resolveVerseId(c)));
+    resolved.forEach((verseId, i) => {
+      if (verseId) rows.push({ emotion_code, verse_id: verseId });
+      else missing.push({ emotion_code, ref: coords[i].ref });
+    });
   }
 
   if (rows.length > 0) {
