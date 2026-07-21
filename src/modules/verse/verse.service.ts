@@ -2,12 +2,37 @@ import { Injectable } from '@nestjs/common';
 import { VerseRepository } from './verse.repository';
 import { Verse } from './verse.types';
 
+// 현재는 개역개정 단일 번역본만 적재돼 있다. 유저 번역본 설정이 생기면 이 상수를 대체한다.
+const DEFAULT_TRANSLATION_CODE = 'KO_GAEGAEJEONG';
+// 감정 추천으로 한 번에 보여줄 구절 수.
+const RECOMMENDATION_COUNT = 6;
+
 /**
  * Verse 비즈니스 로직. controller 와 repository 사이에서 규칙을 처리한다.
  */
 @Injectable()
 export class VerseService {
   constructor(private readonly verseRepository: VerseRepository) {}
+
+  /**
+   * 감정 기반 구절 추천. 해당 감정에 큐레이션된 후보(현재 번역본) 중
+   * 무작위 RECOMMENDATION_COUNT개를 골라 반환한다.
+   */
+  async getRecommendations(emotion: string): Promise<Verse[]> {
+    const candidates = await this.verseRepository.findEmotionVerseCandidates(
+      emotion,
+      DEFAULT_TRANSLATION_CODE,
+    );
+
+    // 후보를 Fisher–Yates 로 고르게 섞어 앞에서 N개만 반환한다(sort 무작위 비교의 분포 편향 회피).
+    // 후보가 N개 미만이면 slice 가 있는 만큼만 준다.
+    const shuffled = [...candidates];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, RECOMMENDATION_COUNT);
+  }
 
   /**
    * 오늘의 말씀 조회. date는 클라이언트가 보낸 로컬 날짜 문자열이며

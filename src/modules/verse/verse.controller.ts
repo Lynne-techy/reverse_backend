@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { GetRecommendationsQueryDto } from './dto/get-recommendations.dto';
 import { GetTodayVerseQueryDto } from './dto/get-today-verse.dto';
 import { GetVerseRangeQueryDto } from './dto/get-verse-range.dto';
 import { VerseService } from './verse.service';
@@ -20,6 +21,19 @@ export class VerseController {
   @Get('today')
   getToday(@Query() query: GetTodayVerseQueryDto): Promise<Verse> {
     return this.verseService.getToday(query.date);
+  }
+
+  /** GET /verses/recommendations?emotion= — 감정에 맞는 추천 구절 (무작위 6개) */
+  @ApiOperation({
+    summary: '감정 기반 구절 추천',
+    description:
+      '감정 코드에 큐레이션된 구절들 중 무작위 6개를 유저 번역본으로 반환한다.',
+  })
+  @Get('recommendations')
+  getRecommendations(
+    @Query() query: GetRecommendationsQueryDto,
+  ): Promise<Verse[]> {
+    return this.verseService.getRecommendations(query.emotion);
   }
 
   /** GET /verses?book=&chapter=&from=&to= — 같은 장 안의 절 범위 조회 (key verse 선택용) */

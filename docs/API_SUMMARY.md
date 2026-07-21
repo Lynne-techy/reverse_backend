@@ -20,6 +20,7 @@
 - [verses — 구절](#verses--구절)
   - [오늘의 말씀 조회](#오늘의-말씀-조회) — `GET /verses/today`
   - [절 범위 조회](#절-범위-조회) — `GET /verses`
+  - [감정 기반 구절 추천](#감정-기반-구절-추천) — `GET /verses/recommendations`
 - [writing-sessions — 필사](#writing-sessions--필사)
   - [업로드 URL 발급 (세션 생성)](#업로드-url-발급-세션-생성) — `POST /writing-sessions/upload-url`
   - [기록 저장 (완료 요청)](#기록-저장-완료-요청) — `POST /writing-sessions/:id/complete`
@@ -166,6 +167,44 @@ complete 때 보낼 key verse(대표 절)를 고르는 화면에서 사용합니
     "chapter": 23,
     "verseNo": 2,
     "text": "그가 나를 푸른 풀밭에 누이시며 쉴 만한 물 가로 인도하시는도다",
+    "createdAt": "2026-07-13T09:44:01.815177+00:00"
+  }
+]
+```
+
+### 감정 기반 구절 추천
+
+- [x] `GET /verses/recommendations?emotion=depression`
+
+선택한 감정에 큐레이션된 구절들 중 **무작위 최대 6개**를 유저 번역본(현재 개역개정 고정)으로
+반환합니다. 감정별 추천 화면용. 후보가 6개보다 적으면 있는 만큼만, 매 호출마다 구성이 바뀝니다.
+`emotion`은 아래 8종 중 하나여야 하며(그 외 값은 400), 표시 라벨("우울할 때" 등)은 프론트가
+코드로 렌더링합니다.
+
+- `depression`(우울할 때) · `fear`(두려울 때) · `gratitude`(감사할 때) · `love`(사랑할 때)
+- `anxiety`(불안할 때) · `joy`(기쁠 때) · `loneliness`(외로울 때) · `weariness`(지칠 때)
+
+```json
+// GET /verses/recommendations?emotion=depression — 응답 형태는 절 범위 조회와 동일(최대 6개)
+[
+  {
+    "id": 14290,
+    "translationCode": "KO_GAEGAEJEONG",
+    "bookNo": 19,
+    "bookName": "시편",
+    "chapter": 34,
+    "verseNo": 18,
+    "text": "여호와는 마음이 상한 자를 가까이 하시고 충심으로 통회하는 자를 구원하시는도다",
+    "createdAt": "2026-07-13T09:44:01.815177+00:00"
+  },
+  {
+    "id": 23145,
+    "translationCode": "KO_GAEGAEJEONG",
+    "bookNo": 40,
+    "bookName": "마태복음",
+    "chapter": 11,
+    "verseNo": 28,
+    "text": "수고하고 무거운 짐 진 자들아 다 내게로 오라 내가 너희를 쉬게 하리라",
     "createdAt": "2026-07-13T09:44:01.815177+00:00"
   }
 ]

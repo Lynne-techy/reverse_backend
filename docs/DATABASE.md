@@ -36,8 +36,8 @@ erDiagram
 
     verses ||--o{ writing_sessions : "대상 구절"
     verses ||--o{ daily_verses : "오늘의 말씀"
-    verses ||--o{ verse_emotion_tags : "감정 태그"
-    emotion_tags ||--o{ verse_emotion_tags : "태그"
+    verses ||--o{ emotion_verses : "감정 추천 후보"
+    emotion_tags ||--o{ emotion_verses : "감정"
 
     quests ||--o{ user_quests : "정의"
 
@@ -169,11 +169,24 @@ erDiagram
 
 > **결정 (2026-07-13)**: 처음엔 `book_no` 단일 PK(`20260713010000_book_infos.sql`)로 시작했으나, 번역본별 콘텐츠를 담을 수 없다는 한계를 발견해 `(translation_code, book_no)` 복합 PK로 확장했습니다(`20260713020000_book_infos_translation_pk.sql` — 컬럼 추가 → 기존 66행 백필 → PK 교체 순서로 무중단 반영). `verses`는 서로게이트 `id` + UNIQUE 제약을 쓰지만, `book_infos`는 아직 이 테이블을 FK로 참조하는 곳이 없어 자연키(복합 PK)를 그대로 썼습니다 — 나중에 다른 테이블이 참조해야 하면 그때 서로게이트 id 도입을 재검토합니다. `verses`처럼 신뢰된 시딩 스크립트(`scripts/seed-books.mjs`, `data/books.json`)로만 채우는 참조 데이터입니다.
 
-#### `emotion_tags` **[이후]** — 감정 태그 마스터 (8종)
-`code`(PK), `label_ko`, `sort_order`. 예: `comfort`(위로), `hope`(희망), `gratitude`(감사)…
+#### `emotion_tags` **[구현됨]** — 감정 마스터 (8종)
+`code`(PK), `sort_order`. 8종: `depression`·`fear`·`gratitude`·`love`·`anxiety`·`joy`·`loneliness`·`weariness`.
+표시 라벨("우울할 때" 등)은 **DB에 두지 않고 프론트 i18n이 code로 렌더링**한다 — UI 언어 축은
+번역본(`translation_code`) 축과 별개이고, 라벨을 컬럼으로 두면 언어 추가마다 스키마가 바뀌기 때문.
+소수 고정 마스터라 시드 스크립트 없이 마이그레이션 안에서 INSERT로 채운다.
 
-#### `verse_emotion_tags` **[이후]** — 구절 ↔ 감정 (N:M)
-`verse_id`, `tag_code`, `weight`. PK `(verse_id, tag_code)`. 감정 기반 추천에 사용.
+#### `emotion_verses` **[구현됨]** — 감정 ↔ 구절 큐레이션 (추천)
+`emotion_code`(FK→emotion_tags), `verse_id`(FK→verses). PK `(emotion_code, verse_id)`.
+사람이 감정별로 고른 구절(개역개정 30개씩)을 담아 `GET /verses/recommendations`가 무작위 6개를 뽑는다.
+
+> **결정 (2026-07-21)**: 애초 설계(`verse_emotion_tags`: `verse_id`+`tag_code`+`weight`)를 **큐레이션 방식**으로
+> 재구성했다. 보편 태깅(성경 전체에 가중치 태그)이 아니라, 감정당 30개를 **손으로 골라** 담는다
+> ([열린 질문 ④](#5-팀-논의가-필요한-열린-질문) 일부 해소). 이렇게 하면 번역본별 결번 절(예: NIV 마태 17:21)을
+> 큐레이션 단계에서 자연히 피할 수 있어 fallback 로직이 필요 없다. `verse_id`(대리키)는 번역본을 품으므로
+> 조회 시 `verses`와 inner join 해 유저 번역본만 남긴다 — 번역본이 늘면 그 번역본 `verse_id`로 **행만 추가**하면
+> 되고 스키마는 불변. 좌표 데이터는 `data/emotion-verses.json`(번역본 독립 자연키)에 두고
+> `scripts/seed-emotion-verses.mjs`가 verse_id로 resolve해 적재한다. `weight`는 단순 무작위 추천이라 도입하지
+> 않았다(가중/이력 기반이 필요해지면 추가). (마이그레이션 `20260721000000_emotion_recommend.sql`)
 
 #### `daily_verses` **[MVP]** — 오늘의 말씀
 | 컬럼 | 타입 | 설명 |
@@ -255,9 +268,11 @@ erDiagram
 | 단계 | 테이블 |
 |---|---|
 | **MVP (먼저)** | users, verses, daily_verses, writing_sessions, user_statistics, user_daily_activity, streak_freeze_events |
-| **이후** | emotion_tags, verse_emotion_tags(추천), quests, user_quests(게임화) |
+| **추가됨** | emotion_tags, emotion_verses(감정 추천) |
+| **이후** | quests, user_quests(게임화) |
 
-> MVP 7개 테이블은 `supabase/migrations/20260705000000_init_schema.sql`에 작성 완료되었습니다. 보류 항목은 → [6. 보류/폐기 항목](#6-보류폐기-항목).
+> MVP 7개 테이블은 `supabase/migrations/20260705000000_init_schema.sql`에 작성 완료되었습니다.
+> 감정 추천(emotion_tags, emotion_verses)은 `20260721000000_emotion_recommend.sql`로 추가했습니다. 보류 항목은 → [6. 보류/폐기 항목](#6-보류폐기-항목).
 
 ---
 
@@ -266,7 +281,7 @@ erDiagram
 1. **유사도 통과 임계치**: 초안 85%. Gemini의 한국어 손글씨 판정 편차를 실측 후 조정 필요. 임계치를 코드 상수로 둘지, 설정값/구절 난이도별로 둘지?
 2. **streak 보호권(freeze) 규칙**: 며칠 연속하면 몇 개 지급? 주당/총 상한? 빠진 날 자동 소모할지?
 3. **시각화 지표**: 밤하늘 별의 밝기/크기/색을 각각 어떤 데이터에 연결할지 (유사도? 글자수? 연속일?). → 저장할 컬럼이 달라짐. **MVP는 잔디(횟수)만 구현, 별 관련 컬럼은 확정 후 추가 예정.**
-4. **감정 태그 8종 확정**: 목록과 추천 알고리즘(단순 랜덤 vs 가중치 vs 이력 기반).
+4. ~~**감정 태그 8종 확정**: 목록과 추천 알고리즘.~~ **(2026-07-21 확정)** 8종 code 확정, 추천은 단순 무작위(Fisher–Yates 6개). 가중치/이력 기반은 필요 시 후속.
 5. **필사 단위**: 한 절만? 아니면 여러 절(구절 묶음)도 허용? 후자면 `verses`에 범위 컬럼 추가 필요.
 
 ---
