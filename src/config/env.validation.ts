@@ -27,6 +27,14 @@ export const envSchema = z.object({
   // 각 검사는 이미지 버퍼 + base64 사본을 메모리에 들고 Gemini를 호출하므로,
   // 업로드 폭주 시 무제한 병렬을 막아 2GB VM의 메모리를 보호한다. VM을 키우면 상향.
   SIMILARITY_MAX_CONCURRENCY: z.coerce.number().int().positive().default(3),
+  // Gemini 추론/출력 튜닝 (토큰·지연 최적화).
+  // 2.5-flash는 기본 "사고(thinking)"가 켜져 있어 구조적 추출엔 불필요한
+  // 토큰·지연을 유발 → 기본 0으로 끈다. (필요 시 상향)
+  GEMINI_THINKING_BUDGET: z.coerce.number().int().min(0).default(0),
+  // 결과가 작은 JSON이라 출력 토큰 상한으로 폭주·비용을 막는다.
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(512),
+  // Gemini 호출 타임아웃(ms) — 무한 대기로 유사도 검사 워커 슬롯이 묶이는 것을 방지.
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
 });
 
 export type Env = z.infer<typeof envSchema>;

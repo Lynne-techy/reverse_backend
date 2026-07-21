@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { HandwritingCheckService } from './handwriting-check.service';
 import type { UploadedImageFile } from './handwriting-check.types';
+import type { Env } from '../../config/env.validation';
 
 describe('HandwritingCheckService', () => {
   const image: UploadedImageFile = {
@@ -18,9 +19,18 @@ describe('HandwritingCheckService', () => {
       if (key === 'GEMINI_MODEL') {
         return 'gemini-test-model';
       }
+      if (key === 'GEMINI_THINKING_BUDGET') {
+        return 0;
+      }
+      if (key === 'GEMINI_MAX_OUTPUT_TOKENS') {
+        return 512;
+      }
+      if (key === 'GEMINI_TIMEOUT_MS') {
+        return 30000;
+      }
       return undefined;
     }),
-  } as unknown as ConfigService;
+  } as unknown as ConfigService<Env, true>;
 
   beforeEach(() => {
     jest.restoreAllMocks();
@@ -177,5 +187,30 @@ describe('HandwritingCheckService', () => {
       confidence: 'low',
       notes: null,
     });
+  });
+
+  it('sends thinking budget, output cap, and response schema in generationConfig', async () => {
+    const fetchMock = mockGeminiText(
+      JSON.stringify({
+        isPenHandwriting: true,
+        text: 'sample',
+        similarityScore: 90,
+        scriptureReference: null,
+        confidence: 'high',
+        notes: null,
+      }),
+    );
+
+    const service = new HandwritingCheckService(config);
+    await service.checkAndLog(image, 'sample');
+
+    const gen = requestBody(fetchMock).generationConfig as Record<
+      string,
+      unknown
+    >;
+    expect(gen.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(gen.maxOutputTokens).toBe(512);
+    expect(gen.responseSchema).toBeDefined();
+    expect(gen.responseMimeType).toBe('application/json');
   });
 });

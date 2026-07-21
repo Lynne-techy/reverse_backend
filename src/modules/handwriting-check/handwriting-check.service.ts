@@ -20,6 +20,23 @@ interface GeminiGenerateContentResponse {
   }>;
 }
 
+/**
+ * Gemini 구조적 출력 스키마 — HandwritingCheckResult 형태를 강제한다.
+ * 프롬프트로 형식을 서술하는 대신 스키마로 고정 → 파싱 실패 0 + 출력 토큰 절약.
+ */
+const HANDWRITING_RESULT_SCHEMA = {
+  type: 'object',
+  properties: {
+    isPenHandwriting: { type: 'boolean' },
+    text: { type: 'string', nullable: true },
+    similarityScore: { type: 'number', nullable: true },
+    scriptureReference: { type: 'string', nullable: true },
+    confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+    notes: { type: 'string', nullable: true },
+  },
+  required: ['isPenHandwriting', 'confidence'],
+} as const;
+
 @Injectable()
 export class HandwritingCheckService {
   private readonly logger = new Logger(HandwritingCheckService.name);
@@ -36,41 +53,67 @@ export class HandwritingCheckService {
     }
 
     const model = this.config.get('GEMINI_MODEL', { infer: true });
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text:
-                    '이미지를 분석해 주세요. 펜으로 직접 필사한 손글씨인지 판단하고, 손글씨라면 이미지에 적힌 문구를 최대한 정확히 판독해 주세요. ' +
-                    '그리고 판독한 문구가 아래 원문과 의미/글자 기준으로 얼마나 유사한지 0~100 점수로 평가해 주세요. ' +
-                    '띄어쓰기와 사소한 문장부호 차이는 약하게 감점하고, 글자 누락/추가/순서 변경/다른 단어는 강하게 감점해 주세요. ' +
-                    'text에는 원문과 비교할 필사 본문만 넣고, 성경/경전 구절 출처 표기나 번역문/인쇄된 보조 문구는 제외하세요. ' +
-                    '이미지 안이나 원문에서 성경/경전 구절 출처를 알 수 있으면 "잠언 4:23"처럼 한국어 표기로 scriptureReference에만 넣고, 알 수 없으면 null로 두세요. ' +
-                    `원문: ${JSON.stringify(originalText)} ` +
-                    '반드시 JSON만 반환하세요. 형식: {"isPenHandwriting": boolean, "text": string | null, "similarityScore": number | null, "scriptureReference": string | null, "confidence": "low" | "medium" | "high", "notes": string | null}',
-                },
-                {
-                  inline_data: {
-                    mime_type: image.mimetype,
-                    data: image.buffer.toString('base64'),
+    const thinkingBudget = this.config.get('GEMINI_THINKING_BUDGET', {
+      infer: true,
+    });
+    const maxOutputTokens = this.config.get('GEMINI_MAX_OUTPUT_TOKENS', {
+      infer: true,
+    });
+    const timeoutMs = this.config.get('GEMINI_TIMEOUT_MS', { infer: true });
+
+    let response: Awaited<ReturnType<typeof fetch>>;
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // 타임아웃 — 무한 대기로 유사도 검사 동시성 슬롯이 묶이는 것을 방지.
+          signal: AbortSignal.timeout(timeoutMs),
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    // 형식 서술은 responseSchema로 대체 → 프롬프트 슬림화(입력 토큰 절약).
+                    text:
+                      '이미지를 분석해 주세요. 펜으로 직접 필사한 손글씨인지 판단하고, 손글씨라면 이미지에 적힌 문구를 최대한 정확히 판독해 주세요. ' +
+                      '그리고 판독한 문구가 아래 원문과 의미/글자 기준으로 얼마나 유사한지 0~100 점수로 평가해 주세요. ' +
+                      '띄어쓰기와 사소한 문장부호 차이는 약하게 감점하고, 글자 누락/추가/순서 변경/다른 단어는 강하게 감점해 주세요. ' +
+                      'text에는 원문과 비교할 필사 본문만 넣고, 성경/경전 구절 출처 표기나 번역문/인쇄된 보조 문구는 제외하세요. ' +
+                      '이미지 안이나 원문에서 성경/경전 구절 출처를 알 수 있으면 "잠언 4:23"처럼 한국어 표기로 scriptureReference에만 넣고, 알 수 없으면 null로 두세요. ' +
+                      `원문: ${JSON.stringify(originalText)}`,
                   },
-                },
-              ],
+                  {
+                    inline_data: {
+                      mime_type: image.mimetype,
+                      data: image.buffer.toString('base64'),
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              // 구조적 출력 — 형식 강제로 파싱 실패 0 + 출력 토큰 절약.
+              responseSchema: HANDWRITING_RESULT_SCHEMA,
+              // 결과가 작은 JSON이라 출력 상한을 둔다.
+              maxOutputTokens,
+              // 2.5-flash "사고" 예산 — 구조적 추출엔 불필요 → 기본 0(토큰·지연 절감).
+              thinkingConfig: { thinkingBudget },
             },
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-          },
-        }),
-      },
-    );
+          }),
+        },
+      );
+    } catch (error) {
+      // 타임아웃(TimeoutError)·네트워크 오류 → 명확한 503으로 변환.
+      // (호출부 processSimilarity가 failed 처리 → 사용자 재시도 가능)
+      this.logger.error(`Gemini 호출 실패(네트워크/타임아웃): ${String(error)}`);
+      throw new ServiceUnavailableException(
+        'Gemini 이미지 판독 호출에 실패했습니다.',
+      );
+    }
 
     if (!response.ok) {
       const body = await response.text();
