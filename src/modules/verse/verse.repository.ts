@@ -78,6 +78,30 @@ export class VerseRepository {
     return (data ?? []).map(toVerse);
   }
 
+  /**
+   * 감정 추천 후보 조회. emotion_verses(감정↔구절 큐레이션)를 verses 와 inner join 해
+   * 주어진 번역본의 후보 절들을 모두 반환한다(감정당 ~30개). 무작위 N개 선별은 서비스가 한다.
+   * `verses!inner` 라야 verses.translation_code 필터가 부모 행까지 걸러내는 진짜 inner join 이 된다.
+   */
+  async findEmotionVerseCandidates(
+    emotionCode: string,
+    translationCode: string,
+  ): Promise<Verse[]> {
+    // Database 타입 생성 없이 SupabaseClient 를 쓰는 탓에 중첩 select(verses!inner)의 반환
+    // 타입 추론이 어긋난다. countVersesPerBook 과 같이 data 를 직접 단언한다.
+    const { data, error } = await this.supabase
+      .from('emotion_verses')
+      .select('verses!inner(*)')
+      .eq('emotion_code', emotionCode)
+      .eq('verses.translation_code', translationCode);
+
+    if (error) {
+      throw new Error(`감정 추천 후보 조회 실패: ${error.message}`);
+    }
+    const rows = (data ?? []) as unknown as { verses: VerseRow }[];
+    return rows.map((row) => toVerse(row.verses));
+  }
+
   /** 주어진 날짜에 배정된 오늘의 말씀 조회 (없으면 null). */
   async findDailyVerseByDate(date: string): Promise<Verse | null> {
     const { data, error } = await this.supabase
