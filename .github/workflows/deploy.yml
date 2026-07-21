@@ -28,22 +28,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 백엔드 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: back/reverse_backend
       - name: 프론트 체크아웃 (web 이미지용)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Lynne-techy/reverse_app
           ref: main
           path: front/reverse_app
       - name: GCP 인증 (Workload Identity — 키리스)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.DEPLOY_SA }}
       - name: gcloud 설치
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
       - name: Docker를 Artifact Registry에 인증
         run: gcloud auth configure-docker ${{ env.AR_HOST }} --quiet
       - name: api 이미지 빌드·push (sha + latest)
@@ -54,6 +54,14 @@ jobs:
             back/reverse_backend
           docker push ${{ env.AR_REPO }}/api:${{ github.sha }}
           docker push ${{ env.AR_REPO }}/api:latest
+      - name: api 이미지 취약점 스캔 (Trivy — 우선 리포트, 미차단)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.AR_REPO }}/api:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0" # 베이스라인 정리 후 "1"로 승격해 게이트로 전환
       - name: web 이미지 빌드·push (sha + latest)
         run: |
           docker build \
@@ -68,12 +76,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: GCP 인증 (Workload Identity — 키리스)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.DEPLOY_SA }}
       - name: gcloud 설치
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
       - name: IAP 터널로 배포 (설정 pull + 이미지 pull + up)
         run: |
           gcloud compute ssh etri405a@reverse-vm \

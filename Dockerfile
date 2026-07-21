@@ -16,5 +16,8 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev      # 운영 의존성만
 COPY --from=build /app/dist ./dist
+# 비루트 실행 — node 이미지 기본 사용자(uid 1000). dist·node_modules는 root 소유지만
+# 월드 리더블이라 읽기·실행 가능하고, API는 디스크에 쓰지 않는 무상태 컨테이너.
+USER node
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
