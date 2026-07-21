@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { GEMINI_COMPLETE_THROTTLE } from '../../common/throttler/throttle.constants';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { CompleteWritingSessionDto } from './dto/complete-writing-session.dto';
@@ -76,16 +78,24 @@ export class WritingController {
       '업로드 후 범위에서 고른 key verse와 함께 호출한다. key verse를 확정하고 세션을 processing으로 바꾼 뒤 즉시 응답한다. ' +
       'Gemini 유사도 검사는 백그라운드에서 수행되므로 GET /writing-sessions/:id를 폴링해 completed/failed를 확인한다. failed면 재호출로 재시도할 수 있다.',
   })
+  // 유료 Gemini 유사도 검사를 트리거 → 전역 기본값보다 훨씬 낮게 재정의(비용 방어).
+  @Throttle(GEMINI_COMPLETE_THROTTLE)
   @Post(':id/complete')
   complete(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: CompleteWritingSessionDto,
   ): Promise<WritingSession> {
-    return this.writingService.complete(user.userId, id, dto.keyVerseId, dto.date, {
-      meditation: dto.meditation,
-      application: dto.application,
-      prayer: dto.prayer,
-    });
+    return this.writingService.complete(
+      user.userId,
+      id,
+      dto.keyVerseId,
+      dto.date,
+      {
+        meditation: dto.meditation,
+        application: dto.application,
+        prayer: dto.prayer,
+      },
+    );
   }
 }

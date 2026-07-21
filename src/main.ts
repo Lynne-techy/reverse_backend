@@ -1,13 +1,23 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import type { Env } from './config/env.validation';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Cloudflare → nginx → node 프록시 뒤라 X-Forwarded-For 를 신뢰해야
+  // rate limit 의 IP 폴백(req.ip)이 실제 클라이언트를 가리킨다.
+  app.set('trust proxy', 1);
+
+  // 보안 헤더(방어심층). CSP·HSTS 는 브라우저 앱을 서빙하는 nginx 가 소유하므로
+  // 여기선 끄고(JSON API엔 CSP 불필요, HSTS 중복 방지) 나머지 안전 헤더만 적용.
+  app.use(helmet({ contentSecurityPolicy: false, hsts: false }));
 
   app.useGlobalPipes(
     new ValidationPipe({

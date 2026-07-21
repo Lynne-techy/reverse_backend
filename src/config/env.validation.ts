@@ -35,6 +35,12 @@ export const envSchema = z.object({
   GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(512),
   // Gemini 호출 타임아웃(ms) — 무한 대기로 유사도 검사 워커 슬롯이 묶이는 것을 방지.
   GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+
+  // Rate limiting (전역 기본값). 키는 IP가 아니라 인증 토큰의 sub(userId) —
+  // nginx/Cloudflare 뒤라 모든 요청이 같은 프록시 IP로 보이기 때문(UserThrottlerGuard).
+  // 유료 Gemini를 트리거하는 complete 라우트는 데코레이터로 더 낮게 재정의한다.
+  THROTTLE_TTL_MS: z.coerce.number().int().positive().default(60000),
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
 });
 
 export type Env = z.infer<typeof envSchema>;
