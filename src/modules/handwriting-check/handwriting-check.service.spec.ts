@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import sharp from 'sharp';
 import { HandwritingCheckService } from './handwriting-check.service';
 import type { UploadedImageFile } from './handwriting-check.types';
 import type { Env } from '../../config/env.validation';
@@ -212,5 +213,50 @@ describe('HandwritingCheckService', () => {
     expect(gen.maxOutputTokens).toBe(512);
     expect(gen.responseSchema).toBeDefined();
     expect(gen.responseMimeType).toBe('application/json');
+  });
+
+  it('큰 이미지를 1024px 이내 JPEG로 다운스케일해 전송한다', async () => {
+    const big = await sharp({
+      create: {
+        width: 2000,
+        height: 1500,
+        channels: 3,
+        background: { r: 10, g: 20, b: 30 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const fetchMock = mockGeminiText(
+      JSON.stringify({
+        isPenHandwriting: true,
+        text: 'x',
+        similarityScore: 80,
+        scriptureReference: null,
+        confidence: 'high',
+        notes: null,
+      }),
+    );
+
+    const service = new HandwritingCheckService(config);
+    await service.checkAndLog(
+      { buffer: big, mimetype: 'image/png', originalname: 'big.png', size: big.length },
+      '원문',
+    );
+
+    const body = requestBody(fetchMock) as {
+      contents: Array<{
+        parts: Array<{ inline_data?: { mime_type: string; data: string } }>;
+      }>;
+    };
+    const part = body.contents[0].parts.find((p) => p.inline_data);
+    expect(part?.inline_data?.mime_type).toBe('image/jpeg');
+
+    const sent = await sharp(
+      Buffer.from(part?.inline_data?.data ?? '', 'base64'),
+    ).metadata();
+    expect(Math.max(sent.width ?? 0, sent.height ?? 0)).toBeLessThanOrEqual(
+      1024,
+    );
   });
 });

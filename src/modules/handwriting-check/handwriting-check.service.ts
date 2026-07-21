@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import sharp from 'sharp';
 import type { Env } from '../../config/env.validation';
 import {
   HandwritingCheckResult,
@@ -37,6 +38,14 @@ const HANDWRITING_RESULT_SCHEMA = {
   required: ['isPenHandwriting', 'confidence'],
 } as const;
 
+/**
+ * Gemini 입력 이미지 다운스케일 파라미터. Gemini는 이미지를 타일로 토큰화하므로
+ * 해상도가 곧 입력 토큰 비용 → 전송 전 긴 변을 IMAGE_MAX_DIM으로 축소하고 JPEG로 재압축.
+ * 손글씨 판독엔 1024px면 충분하다.
+ */
+const IMAGE_MAX_DIM = 1024;
+const IMAGE_JPEG_QUALITY = 80;
+
 @Injectable()
 export class HandwritingCheckService {
   private readonly logger = new Logger(HandwritingCheckService.name);
@@ -60,6 +69,10 @@ export class HandwritingCheckService {
       infer: true,
     });
     const timeoutMs = this.config.get('GEMINI_TIMEOUT_MS', { infer: true });
+
+    // 전송 전 이미지 다운스케일(입력 토큰·지연 절감). 실패 시 원본으로 폴백.
+    const { data: imageData, mimeType: imageMime } =
+      await this.downscaleImage(image);
 
     let response: Awaited<ReturnType<typeof fetch>>;
     try {
@@ -87,8 +100,8 @@ export class HandwritingCheckService {
                   },
                   {
                     inline_data: {
-                      mime_type: image.mimetype,
-                      data: image.buffer.toString('base64'),
+                      mime_type: imageMime,
+                      data: imageData,
                     },
                   },
                 ],
@@ -140,6 +153,37 @@ export class HandwritingCheckService {
       `Handwriting debug result: file=${image.originalname}, isPenHandwriting=${result.isPenHandwriting}, originalText=${originalText}, recognizedText=${result.text ?? ''}, similarityScore=${result.similarityScore ?? 'null'}, scriptureReference=${result.scriptureReference ?? 'null'}`,
     );
     return result;
+  }
+
+  /**
+   * 이미지를 긴 변 IMAGE_MAX_DIM 이내로 축소하고 JPEG로 재압축해 base64로 반환한다.
+   * 원본이 이미 작으면 확대하지 않는다(withoutEnlargement). EXIF 회전도 보정한다.
+   * 손상·비이미지 등으로 실패하면 원본 그대로 전송(안전 폴백) — 판독 자체가 막히지 않게.
+   */
+  private async downscaleImage(
+    image: UploadedImageFile,
+  ): Promise<{ data: string; mimeType: string }> {
+    try {
+      const resized = await sharp(image.buffer)
+        .rotate()
+        .resize({
+          width: IMAGE_MAX_DIM,
+          height: IMAGE_MAX_DIM,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: IMAGE_JPEG_QUALITY })
+        .toBuffer();
+      return { data: resized.toString('base64'), mimeType: 'image/jpeg' };
+    } catch (error) {
+      this.logger.warn(
+        `이미지 다운스케일 실패 — 원본으로 전송: ${String(error)}`,
+      );
+      return {
+        data: image.buffer.toString('base64'),
+        mimeType: image.mimetype,
+      };
+    }
   }
 
   private parseResult(text: string): HandwritingCheckResult {
