@@ -40,6 +40,9 @@ CI/CD는 레지스트리 빌드(GitHub Actions가 빌드해 Artifact Registry pu
 - [ ] (이후) quests, user_quests(게임화).
 
 ## 최근 세션
+- 2026-07-22: **RLS 백스톱 운영 반영** — `20260722000000_rls_backstop.sql`(10개 테이블 `enable row level security`,
+  정책 0개=deny-by-default)을 운영 Supabase 대시보드 SQL Editor로 수동 실행. `pg_tables.rowsecurity` 전부 `true` 검증.
+  서버는 `service_role`(bypassrls)로 붙어 동작 무영향. (마이그레이션은 CI 자동적용 없음 → `supabase db push`/SQL 수동)
 - 2026-07-21: **감정 기반 구절 추천 완료**(위 "완료" 참고). API_SUMMARY/DATABASE 동기화.
 - 2026-07-18: 로컬 백엔드 PORT→3000 + 프론트(`reverse_app`) 구글 OAuth 로그인 실배선
   (AuthContext/ProtectedRoute/`/auth/callback`, Vite 5173 + `/api` 프록시). 프론트 `.env.local` anon 키 +
