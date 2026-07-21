@@ -104,3 +104,21 @@ jobs:
               docker image prune -f
               docker compose ps
             '
+      - name: Cloudflare 엣지 캐시 퍼지 (배포 즉시 HTML 반영 — staleness 0)
+        env:
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          CF_PURGE_TOKEN: ${{ secrets.CF_PURGE_TOKEN }}
+        run: |
+          if [ -z "$CF_ZONE_ID" ] || [ -z "$CF_PURGE_TOKEN" ]; then
+            echo "CF_ZONE_ID/CF_PURGE_TOKEN 시크릿 미설정 — 퍼지 스킵(배포는 정상)"; exit 0
+          fi
+          # 새 이미지가 뜬 뒤 엣지 캐시를 비워 옛 HTML을 즉시 무효화한다.
+          # 자산은 콘텐츠 해시라 purge_everything이어도 새 해시로 온디맨드 재캐시(무해).
+          code=$(curl -sS -o /tmp/cf.json -w "%{http_code}" -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CF_PURGE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+          cat /tmp/cf.json; echo
+          if [ "$code" != "200" ]; then echo "Cloudflare 퍼지 실패(HTTP $code)"; exit 1; fi
+          echo "Cloudflare 엣지 캐시 퍼지 완료"
