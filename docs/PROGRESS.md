@@ -40,6 +40,12 @@ CI/CD는 레지스트리 빌드(GitHub Actions가 빌드해 Artifact Registry pu
 - [ ] (이후) quests, user_quests(게임화).
 
 ## 최근 세션
+- 2026-07-22: **백엔드 Tier1 e2e + CI 게이트** — `main.ts` 전역설정을 `configureApp()`(`src/app.setup.ts`)로
+  추출(prod=e2e 동일, 배포 #42로 반영·동작 동일 검증). 죽은 스텁 제거 후 e2e **18개**(health·auth·verses·stats·
+  writing; 프리픽스·@Public·무토큰 401·ValidationPipe allowlist/forbidNonWhitelisted·응답 스키마). 하네스=
+  `test/utils/e2e-app.ts`(실 AuthGuard 유지·verifyToken만 대체, verse는 repo 페이크로 서비스 관통, stats/writing은
+  서비스 경계 페이크, jose(ESM) 스텁 매핑). **CI `.github/workflows/test.yml`**(배포와 분리, push main+PR에서
+  유닛83+e2e18) 첫 실행 green. 설계=`docs/E2E_TEST_DESIGN.md`. 후속=Tier2 로컬 Supabase 통합·레포 레이어(Docker 필요, opt-in).
 - 2026-07-22: **RLS 백스톱 운영 반영** — `20260722000000_rls_backstop.sql`(10개 테이블 `enable row level security`,
   정책 0개=deny-by-default)을 운영 Supabase 대시보드 SQL Editor로 수동 실행. `pg_tables.rowsecurity` 전부 `true` 검증.
   서버는 `service_role`(bypassrls)로 붙어 동작 무영향. (마이그레이션은 CI 자동적용 없음 → `supabase db push`/SQL 수동)
