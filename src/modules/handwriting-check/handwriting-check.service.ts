@@ -58,7 +58,9 @@ export class HandwritingCheckService {
   ): Promise<HandwritingCheckResult> {
     const apiKey = this.config.get('GEMINI_API_KEY', { infer: true });
     if (!apiKey) {
-      throw new ServiceUnavailableException('GEMINI_API_KEY가 설정되지 않았습니다.');
+      throw new ServiceUnavailableException(
+        'GEMINI_API_KEY가 설정되지 않았습니다.',
+      );
     }
 
     const model = this.config.get('GEMINI_MODEL', { infer: true });
@@ -109,6 +111,9 @@ export class HandwritingCheckService {
             ],
             generationConfig: {
               responseMimeType: 'application/json',
+              // 결정성: 같은 이미지가 호출마다 다른 유사도(예: 85% vs 60%)를 받지 않도록
+              // 온도 0(그리디)로 고정한다. temperature 미설정(기본 ~1.0)이 점수 변동의 주원인.
+              temperature: 0,
               // 구조적 출력 — 형식 강제로 파싱 실패 0 + 출력 토큰 절약.
               responseSchema: HANDWRITING_RESULT_SCHEMA,
               // 결과가 작은 JSON이라 출력 상한을 둔다.
@@ -122,7 +127,9 @@ export class HandwritingCheckService {
     } catch (error) {
       // 타임아웃(TimeoutError)·네트워크 오류 → 명확한 503으로 변환.
       // (호출부 processSimilarity가 failed 처리 → 사용자 재시도 가능)
-      this.logger.error(`Gemini 호출 실패(네트워크/타임아웃): ${String(error)}`);
+      this.logger.error(
+        `Gemini 호출 실패(네트워크/타임아웃): ${String(error)}`,
+      );
       throw new ServiceUnavailableException(
         'Gemini 이미지 판독 호출에 실패했습니다.',
       );
@@ -131,7 +138,9 @@ export class HandwritingCheckService {
     if (!response.ok) {
       const body = await response.text();
       this.logger.error(`Gemini request failed: ${response.status} ${body}`);
-      throw new ServiceUnavailableException('Gemini 이미지 판독 요청에 실패했습니다.');
+      throw new ServiceUnavailableException(
+        'Gemini 이미지 판독 요청에 실패했습니다.',
+      );
     }
 
     const payload = (await response.json()) as GeminiGenerateContentResponse;
@@ -193,9 +202,7 @@ export class HandwritingCheckService {
         isPenHandwriting: parsed.isPenHandwriting === true,
         text: this.parseNullableString(parsed.text),
         similarityScore: this.parseSimilarityScore(parsed.similarityScore),
-        scriptureReference: this.parseNullableString(
-          parsed.scriptureReference,
-        ),
+        scriptureReference: this.parseNullableString(parsed.scriptureReference),
         confidence: this.parseConfidence(parsed.confidence),
         notes: this.parseNullableString(parsed.notes),
       };
@@ -229,7 +236,9 @@ export class HandwritingCheckService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
-  private parseConfidence(value: unknown): HandwritingCheckResult['confidence'] {
+  private parseConfidence(
+    value: unknown,
+  ): HandwritingCheckResult['confidence'] {
     return value === 'medium' || value === 'high' ? value : 'low';
   }
 }
