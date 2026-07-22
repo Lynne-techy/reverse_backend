@@ -9,8 +9,16 @@ import { AuthService } from '../../src/modules/auth/auth.service';
 import { UserService } from '../../src/modules/user/user.service';
 import { VerseRepository } from '../../src/modules/verse/verse.repository';
 import { HandwritingCheckService } from '../../src/modules/handwriting-check/handwriting-check.service';
+import { StatsService } from '../../src/modules/stats/stats.service';
+import { WritingService } from '../../src/modules/writing/writing.service';
 import { UserThrottlerGuard } from '../../src/common/throttler/user-throttler.guard';
-import { FAKE_USER, fakeSupabase, fakeVerseRepository } from './fakes';
+import {
+  FAKE_USER,
+  fakeSupabase,
+  fakeVerseRepository,
+  fakeStatsService,
+  fakeWritingService,
+} from './fakes';
 
 /**
  * Tier 1 e2e 앱 팩토리 — 실제 Nest 앱을 HTTP로 관통하되 외부 I/O만 대체한다.
@@ -31,6 +39,12 @@ export async function createE2EApp(
     .useValue({})
     .overrideProvider(VerseRepository)
     .useValue(opts.verseRepo ?? fakeVerseRepository)
+    // stats/writing은 서비스 경계에서 페이크(컨트롤러 계약 검증). writing 오버라이드는
+    // onApplicationBootstrap(잔류 세션 정리)도 함께 무력화한다.
+    .overrideProvider(StatsService)
+    .useValue(fakeStatsService)
+    .overrideProvider(WritingService)
+    .useValue(fakeWritingService)
     .overrideProvider(UserService)
     .useValue({ provisionFromAuth: async () => undefined })
     .overrideProvider(AuthService)

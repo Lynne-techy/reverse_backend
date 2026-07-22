@@ -61,3 +61,29 @@ function makeQuery(): FakeQuery {
 }
 
 export const fakeSupabase = { from: () => makeQuery() };
+
+/**
+ * stats/writing은 서비스 로직(스트릭 계산·Storage presign·Gemini 트리거)이 무거워
+ * 컨트롤러 계약(라우팅·DTO·인증·직렬화) 검증엔 서비스 경계 페이크가 적절하다.
+ * (verse는 서비스를 실제로 태우고 repo만 페이크 → 두 방식 혼용)
+ */
+export const fakeStatsService = {
+  getMyStatistics: async () => ({
+    currentStreak: 3,
+    longestStreak: 7,
+    totalCount: 42,
+    streakStart: null,
+  }),
+  getActivityCalendar: async () => [{ date: '2026-07-22', count: 2 }],
+};
+
+export const fakeWritingService = {
+  listMyWritings: async () => [],
+  getById: async () => ({ id: 'sess-1', status: 'completed' }),
+  createUploadUrl: async () => ({
+    sessionId: 'sess-1',
+    objectKey: 'writings/e2e/sess-1.jpg',
+    uploadUrl: 'https://example.test/upload',
+  }),
+  complete: async () => ({ id: 'sess-1', status: 'processing' }),
+};

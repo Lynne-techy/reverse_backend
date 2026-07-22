@@ -1,0 +1,30 @@
+name: test
+
+# 배포(deploy.yml)와 분리된 테스트 게이트. 시크릿·프로덕션 접근 없음.
+# push(main) + 모든 PR에서 유닛 + Tier1 e2e(외부 목킹·hermetic)를 돌린다.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 체크아웃
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Node 설정
+        # 시크릿 없는 테스트 워크플로라 태그 사용. deploy.yml 컨벤션에 맞춰 SHA 핀으로 승격 가능.
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: 의존성 설치
+        run: npm ci
+      - name: 유닛 테스트
+        run: npm test
+      - name: e2e 테스트 (Tier1 · 외부 목킹)
+        run: npm run test:e2e
